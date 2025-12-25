@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class EditPresensiDataPage extends StatefulWidget {
   final String kelas;
@@ -19,9 +19,9 @@ class EditPresensiDataPage extends StatefulWidget {
   State<EditPresensiDataPage> createState() => _EditPresensiDataPageState();
 }
 
-class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
+class _EditPresensiDataPageState extends State<EditPresensiDataPage>
+    with LoadingStateMixin {
   final _formKey = GlobalKey<FormState>();
-  bool isLoading = false;
   String? guruEmail;
   late TextEditingController _mataPelajaranController;
   late TextEditingController _kelasController;
@@ -66,8 +66,8 @@ class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    setState(() => isLoading = true);
-    try {
+
+    await executeWithLoading('Memperbarui data presensi...', () async {
       final updateData = {
         'mata_pelajaran_lama': _mataPelajaranLama,
         'kelas_lama': _kelasLama,
@@ -76,18 +76,22 @@ class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
         'kelas_baru': _kelasController.text.trim(),
         'prodi_baru': _prodiController.text.trim(),
       };
+
       debugPrint('📤 Mengirim request edit data presensi:');
       updateData.forEach((key, value) {
         debugPrint('  $key: $value');
       });
+
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/edit_presensi_kelas.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/edit_presensi_kelas.php',
         ),
         body: updateData,
       );
+
       debugPrint('📥 Response status code: ${response.statusCode}');
       debugPrint('📥 Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         if (responseData['status'] == true) {
@@ -98,53 +102,18 @@ class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
               debugPrint('  $key: $value');
             });
           }
-          _showToast('Data presensi berhasil diperbarui');
+          showSuccess('Data presensi berhasil diperbarui');
           Navigator.of(context).pop(true);
         } else {
           debugPrint('❌ ERROR: ${responseData['message']}');
-          _showErrorDialog(
+          showError(
             responseData['message'] ?? 'Gagal memperbarui data presensi',
           );
         }
       } else {
-        _showErrorDialog('Server error: ${response.statusCode}');
+        showError('Server error: ${response.statusCode}');
       }
-    } catch (e) {
-      debugPrint('❌ EXCEPTION: $e');
-      _showErrorDialog('Terjadi kesalahan: $e');
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
-  void _showToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green,
-      textColor: Colors.white,
-      fontSize: 16.0,
-    );
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Kesalahan'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
+    });
   }
 
   @override
@@ -237,7 +206,7 @@ class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -318,34 +287,25 @@ class _EditPresensiDataPageState extends State<EditPresensiDataPage> {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _updatePresensiData,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[600],
+                      child: LoadingButton(
+                        onPressed: _updatePresensiData,
+                        child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
+                          decoration: BoxDecoration(
+                            color: Colors.green[600],
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 2,
+                          child: const Center(
+                            child: Text(
+                              'Simpan',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
                         ),
-                        child:
-                            isLoading
-                                ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                                : const Text(
-                                  'Simpan',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
                       ),
                     ),
                   ],

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,55 +9,112 @@ import 'package:checkin/Pages/Teacher/attendance_detail_page_teacher.dart';
 class NotificationService {
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
   Future<void> init() async {
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings settings = InitializationSettings(
-      android: androidSettings,
-    );
-    await _flutterLocalNotificationsPlugin.initialize(settings);
+    try {
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const InitializationSettings settings = InitializationSettings(
+        android: androidSettings,
+      );
+
+      final bool? initialized = await _flutterLocalNotificationsPlugin
+          .initialize(settings);
+      print('🔔 Notification service initialized: $initialized');
+
+      final androidImplementation =
+          _flutterLocalNotificationsPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
+
+      if (androidImplementation != null) {
+        final bool? granted =
+            await androidImplementation.requestNotificationsPermission();
+        print('🔔 Notification permission granted: $granted');
+      }
+    } catch (e) {
+      print('❌ Error initializing notifications: $e');
+    }
   }
 
   Future<void> showActiveNotification(String kelas) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'presensi_channel',
-          'Presensi Aktif',
-          channelDescription: 'Notifikasi untuk presensi aktif',
-          importance: Importance.max,
-          priority: Priority.high,
-          ongoing: true,
-        );
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-    );
-    await _flutterLocalNotificationsPlugin.show(
-      0,
-      'Presensi Aktif',
-      'Presensi untuk kelas $kelas telah diaktifkan.',
-      platformDetails,
-    );
+    try {
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'presensi_channel',
+            'Presensi Aktif',
+            channelDescription: 'Notifikasi untuk presensi aktif',
+            importance: Importance.max,
+            priority: Priority.high,
+            ongoing: true,
+            autoCancel: false,
+          );
+      const NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+      );
+      await _flutterLocalNotificationsPlugin.show(
+        0,
+        'Presensi Aktif',
+        'Presensi untuk kelas $kelas telah diaktifkan.',
+        platformDetails,
+      );
+      print('✅ Active notification shown for kelas: $kelas');
+    } catch (e) {
+      print('❌ Error showing active notification: $e');
+    }
   }
 
   Future<void> showCompletedNotification(String kelas) async {
-    await _flutterLocalNotificationsPlugin.cancel(0);
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          'presensi_channel',
-          'Presensi Selesai',
-          channelDescription: 'Notifikasi untuk presensi selesai',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-    );
-    await _flutterLocalNotificationsPlugin.show(
-      0,
-      'Presensi Selesai',
-      'Presensi untuk kelas $kelas telah selesai.',
-      platformDetails,
-    );
+    try {
+      await _flutterLocalNotificationsPlugin.cancel(0);
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'presensi_channel',
+            'Presensi Selesai',
+            channelDescription: 'Notifikasi untuk presensi selesai',
+            importance: Importance.max,
+            priority: Priority.high,
+            autoCancel: true,
+          );
+      const NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+      );
+      await _flutterLocalNotificationsPlugin.show(
+        1,
+        'Presensi Selesai',
+        'Presensi untuk kelas $kelas telah selesai.',
+        platformDetails,
+      );
+      print('✅ Completed notification shown for kelas: $kelas');
+    } catch (e) {
+      print('❌ Error showing completed notification: $e');
+    }
+  }
+
+  Future<void> testNotification() async {
+    try {
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+            'test_channel',
+            'Test Notifications',
+            channelDescription: 'Test notification channel',
+            importance: Importance.max,
+            priority: Priority.high,
+          );
+      const NotificationDetails platformDetails = NotificationDetails(
+        android: androidDetails,
+      );
+      await _flutterLocalNotificationsPlugin.show(
+        999,
+        'Test Notification',
+        'This is a test notification to verify the service is working.',
+        platformDetails,
+      );
+      print('✅ Test notification sent');
+    } catch (e) {
+      print('❌ Error showing test notification: $e');
+    }
   }
 }
 
@@ -78,8 +135,12 @@ class _AttendanceHistoryTeacherPageState
   @override
   void initState() {
     super.initState();
-    notificationService.init();
+    _initializeServices();
     loadGuruEmailAndFetchData();
+  }
+
+  Future<void> _initializeServices() async {
+    await notificationService.init();
   }
 
   Future<void> loadGuruEmailAndFetchData() async {
@@ -97,7 +158,7 @@ class _AttendanceHistoryTeacherPageState
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/get_presensi_guru.php?guru_email=$guruEmail',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_presensi_guru.php?guru_email=$guruEmail',
         ),
       );
       if (response.statusCode == 200) {
@@ -134,7 +195,7 @@ class _AttendanceHistoryTeacherPageState
       debugPrint('  - jam: $jam');
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/api/update_sistem_presensi.php',
+          'http://192.168.1.17/aplikasi-checkin/api/update_sistem_presensi.php',
         ),
         body: {
           'id_presensi_kelas': idPresensiKelas.toString(),
@@ -202,6 +263,7 @@ class _AttendanceHistoryTeacherPageState
   Set<String> expandedSemester = {};
   Set<String> expandedProdi = {};
   Set<String> expandedKelas = {};
+  Set<String> expandedTahunAjaran = {};
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -264,7 +326,7 @@ class _AttendanceHistoryTeacherPageState
                               )
                               : ListView(
                                 padding: const EdgeInsets.only(top: 8.0),
-                                children: _buildProdiCards(),
+                                children: _buildTahunAjaranCards(),
                               ),
                     ),
           ),
@@ -273,57 +335,58 @@ class _AttendanceHistoryTeacherPageState
     );
   }
 
-  List<Widget> _buildProdiCards() {
-    final groupedByProdi = <String, List<Map<String, dynamic>>>{};
+  List<Widget> _buildTahunAjaranCards() {
+    final groupedByTahunAjaran = <String, List<Map<String, dynamic>>>{};
     for (final item in pelajaranData) {
-      final prodi = item['prodi'] ?? 'Umum';
-      groupedByProdi.putIfAbsent(prodi, () => []).add(item);
+      final tahunAjaran = item['tahun_ajaran'] ?? 'Tidak Diketahui';
+      groupedByTahunAjaran.putIfAbsent(tahunAjaran, () => []).add(item);
     }
-    List<String> sortedProdiKeys = groupedByProdi.keys.toList()..sort();
+
+    List<String> sortedTahunAjaranKeys =
+        groupedByTahunAjaran.keys.toList()..sort((a, b) => b.compareTo(a));
+
     List<Widget> widgets = [];
-    for (final prodi in sortedProdiKeys) {
-      final isExpanded = expandedProdi.contains(prodi);
-      final items = groupedByProdi[prodi]!;
+    for (final tahunAjaran in sortedTahunAjaranKeys) {
+      final isExpanded = expandedTahunAjaran.contains(tahunAjaran);
+      final items = groupedByTahunAjaran[tahunAjaran]!;
       widgets.add(
         Card(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           elevation: 4,
-          margin: const EdgeInsets.symmetric(vertical: 6),
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
           child: Column(
             children: [
               InkWell(
                 onTap:
                     () => setState(() {
                       if (isExpanded) {
-                        expandedProdi.remove(prodi);
+                        expandedTahunAjaran.remove(tahunAjaran);
                       } else {
-                        expandedProdi.add(prodi);
+                        expandedTahunAjaran.add(tahunAjaran);
                       }
                     }),
                 borderRadius: BorderRadius.circular(16),
                 child: ListTile(
-                  leading: const Icon(Icons.school, color: Colors.cyan),
+                  leading: const Icon(Icons.date_range, color: Colors.indigo),
                   title: Text(
-                    '$prodi',
+                    'Tahun Ajaran: $tahunAjaran',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(
-                          Icons.edit_note,
-                          color: Colors.lightGreenAccent,
-                        ),
-                        tooltip: 'Edit Prodi',
+                        icon: const Icon(Icons.edit_note, color: Colors.green),
+                        tooltip: 'Edit Tahun Ajaran',
                         onPressed: () {
                           final firstItem = items.first;
-                          _showEditProdiDialog(
-                            prodiLama: prodi,
-                            kelas: firstItem['kelas'],
-                            mataPelajaran: firstItem['mata_pelajaran'],
+                          _showEditTahunAjaranDialog(
+                            tahunAjaranLama: tahunAjaran,
+                            prodi: firstItem['prodi'] ?? '',
+                            kelas: firstItem['kelas']?.toString() ?? '',
+                            mataPelajaran: firstItem['mata_pelajaran'] ?? '',
                           );
                         },
                       ),
@@ -338,7 +401,88 @@ class _AttendanceHistoryTeacherPageState
                     horizontal: 5,
                     vertical: 5,
                   ),
-                  child: Column(children: _buildKelasCards(items, prodi)),
+                  child: Column(children: _buildProdiCards(items, tahunAjaran)),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildProdiCards(
+    List<Map<String, dynamic>> tahunAjaranItems,
+    String tahunAjaran,
+  ) {
+    final groupedByProdi = <String, List<Map<String, dynamic>>>{};
+    for (final item in tahunAjaranItems) {
+      final prodi = item['prodi'] ?? 'Umum';
+      groupedByProdi.putIfAbsent(prodi, () => []).add(item);
+    }
+    List<String> sortedProdiKeys = groupedByProdi.keys.toList()..sort();
+    List<Widget> widgets = [];
+    for (final prodi in sortedProdiKeys) {
+      final key = 'prodi_${tahunAjaran}_$prodi';
+      final isExpanded = expandedProdi.contains(key);
+      final items = groupedByProdi[prodi]!;
+      widgets.add(
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 4,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            children: [
+              InkWell(
+                onTap:
+                    () => setState(() {
+                      if (isExpanded) {
+                        expandedProdi.remove(key);
+                      } else {
+                        expandedProdi.add(key);
+                      }
+                    }),
+                borderRadius: BorderRadius.circular(16),
+                child: ListTile(
+                  leading: const Icon(Icons.school, color: Colors.cyan),
+                  title: Text(
+                    '$prodi',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_note, color: Colors.green),
+                        tooltip: 'Edit Prodi',
+                        onPressed: () {
+                          final firstItem = items.first;
+                          _showEditProdiDialog(
+                            prodiLama: prodi,
+                            tahunAjaranLama: tahunAjaran,
+                            kelas: firstItem['kelas'],
+                            mataPelajaran: firstItem['mata_pelajaran'],
+                            semester: firstItem['semester'] ?? '',
+                            jam: firstItem['jam'] ?? '',
+                          );
+                        },
+                      ),
+                      Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
+                    ],
+                  ),
+                ),
+              ),
+              if (isExpanded)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 5,
+                  ),
+                  child: Column(
+                    children: _buildKelasCards(items, prodi, tahunAjaran),
+                  ),
                 ),
             ],
           ),
@@ -351,6 +495,7 @@ class _AttendanceHistoryTeacherPageState
   List<Widget> _buildKelasCards(
     List<Map<String, dynamic>> prodiItems,
     String prodi,
+    String tahunAjaran,
   ) {
     final groupedByKelas = <String, List<Map<String, dynamic>>>{};
     for (final item in prodiItems) {
@@ -359,7 +504,7 @@ class _AttendanceHistoryTeacherPageState
     }
     List<Widget> widgets = [];
     for (final kelas in groupedByKelas.keys) {
-      final key = 'kelas_${prodi}_$kelas';
+      final key = 'kelas_${tahunAjaran}_${prodi}_$kelas';
       final isExpanded = expandedKelas.contains(key);
       final items = groupedByKelas[kelas]!;
       widgets.add(
@@ -393,17 +538,17 @@ class _AttendanceHistoryTeacherPageState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(
-                          Icons.edit_note,
-                          color: Colors.lightGreenAccent,
-                        ),
+                        icon: const Icon(Icons.edit_note, color: Colors.green),
                         tooltip: 'Edit Kelas',
                         onPressed: () {
                           final firstItem = items.first;
                           _showEditKelasDialog(
                             kelasLama: kelas,
                             prodi: prodi,
+                            tahunAjaranLama: tahunAjaran,
                             mataPelajaran: firstItem['mata_pelajaran'],
+                            semester: firstItem['semester'] ?? '',
+                            jam: firstItem['jam'] ?? '',
                           );
                         },
                       ),
@@ -419,7 +564,12 @@ class _AttendanceHistoryTeacherPageState
                     vertical: 5,
                   ),
                   child: Column(
-                    children: _buildSemesterCards(items, prodi, kelas),
+                    children: _buildSemesterCards(
+                      items,
+                      prodi,
+                      kelas,
+                      tahunAjaran,
+                    ),
                   ),
                 ),
             ],
@@ -434,6 +584,7 @@ class _AttendanceHistoryTeacherPageState
     List<Map<String, dynamic>> kelasItems,
     String prodi,
     String kelas,
+    String tahunAjaran,
   ) {
     final groupedBySemester = <String, List<Map<String, dynamic>>>{};
     for (final item in kelasItems) {
@@ -442,7 +593,7 @@ class _AttendanceHistoryTeacherPageState
     }
     List<Widget> widgets = [];
     for (final semester in groupedBySemester.keys) {
-      final key = 'semester_${prodi}_${kelas}_$semester';
+      final key = 'semester_${tahunAjaran}_${prodi}_${kelas}_$semester';
       final isExpanded = expandedSemester.contains(key);
       final items = groupedBySemester[semester]!;
       widgets.add(
@@ -485,7 +636,13 @@ class _AttendanceHistoryTeacherPageState
                     vertical: 5,
                   ),
                   child: Column(
-                    children: _buildMapelCards(items, prodi, kelas, semester),
+                    children: _buildMapelCards(
+                      items,
+                      prodi,
+                      kelas,
+                      semester,
+                      tahunAjaran,
+                    ),
                   ),
                 ),
             ],
@@ -501,6 +658,7 @@ class _AttendanceHistoryTeacherPageState
     String prodi,
     String kelas,
     String semester,
+    String tahunAjaran,
   ) {
     final groupedByMapel = <String, List<Map<String, dynamic>>>{};
     for (final item in semesterItems) {
@@ -509,7 +667,7 @@ class _AttendanceHistoryTeacherPageState
     }
     List<Widget> widgets = [];
     for (final mapel in groupedByMapel.keys) {
-      final key = 'mapel_${prodi}_${kelas}_${semester}_$mapel';
+      final key = 'mapel_${tahunAjaran}_${prodi}_${kelas}_${semester}_$mapel';
       final isExpanded = expandedMapel.contains(key);
       final items = groupedByMapel[mapel]!;
       widgets.add(
@@ -544,10 +702,7 @@ class _AttendanceHistoryTeacherPageState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(
-                          Icons.edit_note,
-                          color: Colors.lightGreenAccent,
-                        ),
+                        icon: const Icon(Icons.edit_note, color: Colors.green),
                         tooltip: 'Edit Mata Pelajaran',
                         onPressed: () {
                           final firstItem = items.first;
@@ -555,6 +710,9 @@ class _AttendanceHistoryTeacherPageState
                             mapelLama: mapel,
                             kelas: firstItem['kelas'],
                             prodi: firstItem['prodi'],
+                            tahunAjaran: tahunAjaran,
+                            semester: firstItem['semester'] ?? '',
+                            jam: firstItem['jam'] ?? '',
                           );
                         },
                       ),
@@ -642,6 +800,7 @@ class _AttendanceHistoryTeacherPageState
               final mataPelajaran = item['mata_pelajaran'];
               final semester = item['semester']?.toString() ?? '';
               final prodi = item['prodi']?.toString() ?? '';
+              final tahunAjaranItem = item['tahun_ajaran']?.toString() ?? '';
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -655,6 +814,7 @@ class _AttendanceHistoryTeacherPageState
                         jam: jam,
                         semester: semester,
                         prodi: prodi,
+                        tahunAjaran: tahunAjaranItem,
                       ),
                 ),
               );
@@ -1529,7 +1689,7 @@ class _AttendanceHistoryTeacherPageState
       });
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/edit_jadwal_presensi.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/edit_jadwal_presensi.php',
         ),
         body: updateData,
       );
@@ -1563,8 +1723,11 @@ class _AttendanceHistoryTeacherPageState
 
   void _showEditProdiDialog({
     required String prodiLama,
+    required String tahunAjaranLama,
     required String kelas,
     required String mataPelajaran,
+    required String semester,
+    required String jam,
   }) {
     final prodiController = TextEditingController(text: prodiLama);
     showDialog(
@@ -1572,9 +1735,18 @@ class _AttendanceHistoryTeacherPageState
       builder: (context) {
         return AlertDialog(
           title: const Text('Edit Program Studi'),
-          content: TextField(
-            controller: prodiController,
-            decoration: const InputDecoration(labelText: 'Nama Prodi Baru'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              TextField(
+                controller: prodiController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Prodi Baru',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1584,17 +1756,26 @@ class _AttendanceHistoryTeacherPageState
             ElevatedButton(
               onPressed: () async {
                 final prodiBaru = prodiController.text.trim();
-                if (prodiBaru.isEmpty) return;
+                if (prodiBaru.isEmpty) {
+                  _showToast('Nama prodi tidak boleh kosong');
+                  return;
+                }
+                Navigator.of(context).pop();
+                setState(() => isUpdating = true);
                 await _editPresensiKelas(
                   prodiLama: prodiLama,
-                  kelasLama: kelas,
-                  mapelLama: mataPelajaran,
+                  kelasLama: '', // KOSONGKAN agar tidak filter per kelas
+                  mapelLama: '', // KOSONGKAN agar tidak filter per mapel
+                  tahunAjaranLama: tahunAjaranLama,
+                  semesterLama: semester,
+                  jamLama: jam,
                   prodiBaru: prodiBaru,
-                  kelasBaru: kelas,
-                  mapelBaru: mataPelajaran,
+                  kelasBaru: '', // KOSONGKAN
+                  mapelBaru: '', // KOSONGKAN
+                  tahunAjaranBaru: tahunAjaranLama,
                 );
-                Navigator.of(context).pop();
                 await fetchMataPelajaran();
+                setState(() => isUpdating = false);
               },
               child: const Text('Simpan'),
             ),
@@ -1607,7 +1788,10 @@ class _AttendanceHistoryTeacherPageState
   void _showEditKelasDialog({
     required String kelasLama,
     required String prodi,
+    required String tahunAjaranLama,
     required String mataPelajaran,
+    required String semester,
+    required String jam,
   }) {
     final kelasController = TextEditingController(text: kelasLama);
     showDialog(
@@ -1615,9 +1799,18 @@ class _AttendanceHistoryTeacherPageState
       builder: (context) {
         return AlertDialog(
           title: const Text('Edit Kelas'),
-          content: TextField(
-            controller: kelasController,
-            decoration: const InputDecoration(labelText: 'Nama Kelas Baru'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              TextField(
+                controller: kelasController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Kelas Baru',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1627,17 +1820,26 @@ class _AttendanceHistoryTeacherPageState
             ElevatedButton(
               onPressed: () async {
                 final kelasBaru = kelasController.text.trim();
-                if (kelasBaru.isEmpty) return;
+                if (kelasBaru.isEmpty) {
+                  _showToast('Nama kelas tidak boleh kosong');
+                  return;
+                }
+                Navigator.of(context).pop();
+                setState(() => isUpdating = true);
                 await _editPresensiKelas(
                   prodiLama: prodi,
                   kelasLama: kelasLama,
-                  mapelLama: mataPelajaran,
+                  mapelLama: '', // KOSONGKAN agar tidak filter per mapel
+                  tahunAjaranLama: tahunAjaranLama,
+                  semesterLama: semester,
+                  jamLama: jam,
                   prodiBaru: prodi,
                   kelasBaru: kelasBaru,
-                  mapelBaru: mataPelajaran,
+                  mapelBaru: '', // KOSONGKAN
+                  tahunAjaranBaru: tahunAjaranLama,
                 );
-                Navigator.of(context).pop();
                 await fetchMataPelajaran();
+                setState(() => isUpdating = false);
               },
               child: const Text('Simpan'),
             ),
@@ -1651,6 +1853,9 @@ class _AttendanceHistoryTeacherPageState
     required String mapelLama,
     required String kelas,
     required String prodi,
+    required String tahunAjaran,
+    required String semester,
+    required String jam,
   }) {
     final mapelController = TextEditingController(text: mapelLama);
     showDialog(
@@ -1658,9 +1863,19 @@ class _AttendanceHistoryTeacherPageState
       builder: (context) {
         return AlertDialog(
           title: const Text('Edit Mata Pelajaran'),
-          content: TextField(
-            controller: mapelController,
-            decoration: const InputDecoration(labelText: 'Nama Mapel Baru'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              TextField(
+                controller: mapelController,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Mapel Baru',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -1670,14 +1885,85 @@ class _AttendanceHistoryTeacherPageState
             ElevatedButton(
               onPressed: () async {
                 final mapelBaru = mapelController.text.trim();
-                if (mapelBaru.isEmpty) return;
+                if (mapelBaru.isEmpty) {
+                  _showToast('Nama mata pelajaran tidak boleh kosong');
+                  return;
+                }
+                Navigator.of(context).pop();
+                setState(() => isUpdating = true);
                 await _editPresensiKelas(
                   prodiLama: prodi,
                   kelasLama: kelas,
                   mapelLama: mapelLama,
+                  tahunAjaranLama: tahunAjaran,
+                  semesterLama: semester,
+                  jamLama: jam,
                   prodiBaru: prodi,
                   kelasBaru: kelas,
                   mapelBaru: mapelBaru,
+                  tahunAjaranBaru: tahunAjaran,
+                );
+                await fetchMataPelajaran();
+                setState(() => isUpdating = false);
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showEditTahunAjaranDialog({
+    required String tahunAjaranLama,
+    required String prodi,
+    required String kelas,
+    required String mataPelajaran,
+  }) {
+    final tahunAjaranController = TextEditingController(text: tahunAjaranLama);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Tahun Ajaran'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: tahunAjaranController,
+                decoration: const InputDecoration(
+                  labelText: 'Tahun Ajaran Baru (contoh: 2024/2025)',
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final tahunAjaranBaru = tahunAjaranController.text.trim();
+                final reg = RegExp(r'^\d{4}/\d{4}$');
+                if (tahunAjaranBaru.isEmpty || !reg.hasMatch(tahunAjaranBaru)) {
+                  _showToast(
+                    'Format tahun ajaran harus yyyy/yyyy, mis. 2024/2025',
+                  );
+                  return;
+                }
+                await _editPresensiKelas(
+                  prodiLama: '',
+                  kelasLama: '',
+                  mapelLama: '',
+                  tahunAjaranLama: tahunAjaranLama,
+                  semesterLama: '',
+                  jamLama: '',
+                  prodiBaru: '',
+                  kelasBaru: '',
+                  mapelBaru: '',
+                  tahunAjaranBaru: tahunAjaranBaru,
                 );
                 Navigator.of(context).pop();
                 await fetchMataPelajaran();
@@ -1694,27 +1980,112 @@ class _AttendanceHistoryTeacherPageState
     required String prodiLama,
     required String kelasLama,
     required String mapelLama,
+    required String tahunAjaranLama,
+    required String semesterLama,
+    required String jamLama,
     required String prodiBaru,
     required String kelasBaru,
     required String mapelBaru,
+    required String tahunAjaranBaru,
   }) async {
+    debugPrint('📤 Mengirim request edit presensi kelas:');
+    debugPrint('  - prodi_lama: "$prodiLama" (empty=${prodiLama.isEmpty})');
+    debugPrint('  - kelas_lama: "$kelasLama" (empty=${kelasLama.isEmpty})');
+    debugPrint(
+      '  - mata_pelajaran_lama: "$mapelLama" (empty=${mapelLama.isEmpty})',
+    );
+    debugPrint('  - tahun_ajaran_lama: $tahunAjaranLama');
+    debugPrint('  - prodi_baru: "$prodiBaru" (empty=${prodiBaru.isEmpty})');
+    debugPrint('  - kelas_baru: "$kelasBaru" (empty=${kelasBaru.isEmpty})');
+    debugPrint(
+      '  - mata_pelajaran_baru: "$mapelBaru" (empty=${mapelBaru.isEmpty})',
+    );
+    debugPrint('  - tahun_ajaran_baru: $tahunAjaranBaru');
+    debugPrint('  - guru_email: $guruEmail');
+
+    // Tentukan tipe edit berdasarkan parameter yang kosong
+    String editType = 'unknown';
+    if (prodiLama.isNotEmpty &&
+        prodiBaru.isNotEmpty &&
+        kelasLama.isEmpty &&
+        mapelLama.isEmpty) {
+      editType = 'EDIT_PRODI_ONLY';
+      debugPrint(
+        '⚠️  CATATAN: Edit PRODI saja - akan update SEMUA mapel/kelas dengan prodi "$prodiLama"',
+      );
+    } else if (kelasLama.isNotEmpty &&
+        kelasBaru.isNotEmpty &&
+        prodiLama.isNotEmpty &&
+        mapelLama.isEmpty) {
+      editType = 'EDIT_KELAS_ONLY';
+      debugPrint(
+        '⚠️  CATATAN: Edit KELAS saja - akan update SEMUA mapel dengan kelas "$kelasLama" di prodi "$prodiLama"',
+      );
+    } else if (mapelLama.isNotEmpty &&
+        mapelBaru.isNotEmpty &&
+        kelasLama.isNotEmpty &&
+        prodiLama.isNotEmpty) {
+      editType = 'EDIT_MAPEL_ONLY';
+      debugPrint(
+        '⚠️  CATATAN: Edit MAPEL saja - akan update SEMUA pertemuan mapel "$mapelLama"',
+      );
+    } else if (prodiLama.isEmpty && kelasLama.isEmpty && mapelLama.isEmpty) {
+      editType = 'EDIT_TAHUN_AJARAN_ONLY';
+      debugPrint(
+        '⚠️  CATATAN: Edit TAHUN AJARAN saja - akan update SEMUA data guru',
+      );
+    } else {
+      editType = 'EDIT_KOMBINASI';
+      debugPrint('⚠️  CATATAN: Edit kombinasi spesifik');
+    }
+    debugPrint('  - EDIT TYPE: $editType');
+
     final response = await http.post(
       Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/guru/edit_presensi_kelas.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/guru/edit_presensi_kelas.php',
       ),
       body: {
         'prodi_lama': prodiLama,
         'kelas_lama': kelasLama,
         'mata_pelajaran_lama': mapelLama,
+        'tahun_ajaran_lama': tahunAjaranLama,
         'prodi_baru': prodiBaru,
         'kelas_baru': kelasBaru,
         'mata_pelajaran_baru': mapelBaru,
+        'tahun_ajaran_baru': tahunAjaranBaru,
+        'guru_email': guruEmail ?? '',
+        'edit_type': editType, // Kirim tipe edit ke backend untuk validasi
       },
     );
+
+    debugPrint('📥 Response status: ${response.statusCode}');
+    debugPrint('📥 Response body: ${response.body}');
+
     final data = json.decode(response.body);
     if (data['status'] == true) {
-      _showToast('Berhasil mengedit data');
+      debugPrint('✅ SUKSES: ${data['message']}');
+      if (data['updated'] != null) {
+        debugPrint('📊 Data hasil update:');
+        data['updated'].forEach((key, value) {
+          debugPrint('  $key: $value');
+        });
+      }
+
+      // Tampilkan pesan yang lebih spesifik
+      String successMsg = 'Berhasil mengedit data!';
+      if (editType == 'EDIT_PRODI_ONLY') {
+        successMsg =
+            'Berhasil mengubah prodi "$prodiLama" → "$prodiBaru" (semua data diupdate)';
+      } else if (editType == 'EDIT_KELAS_ONLY') {
+        successMsg =
+            'Berhasil mengubah kelas "$kelasLama" → "$kelasBaru" (semua mapel diupdate)';
+      } else if (editType == 'EDIT_MAPEL_ONLY') {
+        successMsg =
+            'Berhasil mengubah mapel "$mapelLama" → "$mapelBaru" (semua pertemuan diupdate)';
+      }
+      _showToast(successMsg);
     } else {
+      debugPrint('❌ ERROR: ${data['message']}');
       _showErrorDialog(data['message'] ?? 'Gagal mengedit data');
     }
   }

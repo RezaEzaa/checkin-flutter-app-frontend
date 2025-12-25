@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -26,7 +26,12 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
   bool hasSiswaPhotos = false;
   bool isDownloadingGuru = false;
   bool isDownloadingSiswa = false;
-  String importMode = 'replace_all'; // Add import mode variable
+  String importMode = 'replace_all';
+
+  // Upload status tracking maps
+  Map<String, double> uploadProgress = {};
+  Map<String, String> uploadStatus = {};
+  Map<String, String> uploadMessages = {};
   @override
   void initState() {
     super.initState();
@@ -64,7 +69,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         'check_type': 'photos_only',
       });
       final resp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_upload_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_upload_status.php',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -80,15 +85,24 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
           final data = responseData['data'];
           print("🔍 checkExistingPhotos - Data section: $data");
           final prefs = await SharedPreferences.getInstance();
+
+          // Update status based on server response
+          bool serverGuruStatus = data['guru']?['photo_zip_exists'] ?? false;
+          bool serverSiswaStatus = data['siswa']?['photo_zip_exists'] ?? false;
+
           setState(() {
-            hasGuruPhotos = data['guru']?['photo_zip_exists'] ?? false;
-            hasSiswaPhotos = data['siswa']?['photo_zip_exists'] ?? false;
+            // Update status based on server response for accurate reflection
+            hasGuruPhotos = serverGuruStatus;
+            hasSiswaPhotos = serverSiswaStatus;
           });
+
           await prefs.setBool('has_guru_photos', hasGuruPhotos);
           await prefs.setBool('has_siswa_photos', hasSiswaPhotos);
           print("✅ Photos status check berhasil:");
-          print("   Guru Photos: $hasGuruPhotos");
-          print("   Siswa Photos: $hasSiswaPhotos");
+          print("   Guru Photos: $hasGuruPhotos (server: $serverGuruStatus)");
+          print(
+            "   Siswa Photos: $hasSiswaPhotos (server: $serverSiswaStatus)",
+          );
         }
       }
     } catch (e) {
@@ -97,8 +111,8 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
     }
   }
 
-  Future<void> _showImportModeDialog(VoidCallback onProceed) async {
-    return showDialog<void>(
+  Future<bool> _showImportModeDialog(VoidCallback onProceed) async {
+    final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
@@ -159,14 +173,20 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                           importMode == 'replace_all'
                               ? '🔄 Mode: Ganti Semua'
                               : '➕ Mode: Tambah Baru',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           importMode == 'replace_all'
                               ? 'Semua foto yang sudah ada akan dihapus dan diganti dengan foto baru dari file ZIP.'
                               : 'Foto yang sudah ada akan dipertahankan. Foto baru akan ditambahkan.',
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black,
+                          ),
                         ),
                       ],
                     ),
@@ -176,16 +196,11 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
               actions: <Widget>[
                 TextButton(
                   child: const Text('Batal'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(false),
                 ),
                 ElevatedButton(
                   child: const Text('Lanjutkan'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    onProceed();
-                  },
+                  onPressed: () => Navigator.of(context).pop(true),
                 ),
               ],
             );
@@ -193,6 +208,12 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         );
       },
     );
+
+    if (result == true) {
+      onProceed();
+    }
+
+    return result ?? false;
   }
 
   Future<void> showAllPhotosStatus() async {
@@ -207,7 +228,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         'check_type': 'photos_only',
       });
       final resp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_upload_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_upload_status.php',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -260,7 +281,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         'type': 'guru',
       });
       final guruResp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_photos_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_photos_status.php',
         data: guruFormData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -270,15 +291,17 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       if (guruResp.statusCode == 200) {
         final guruData = json.decode(guruResp.data);
         print("🔍 Guru Photos Status Response: $guruData");
-        hasGuruPhotos = guruData['has_data'] ?? false;
-        print("🔍 hasGuruPhotos: $hasGuruPhotos");
+        bool serverGuruStatus = guruData['has_data'] ?? false;
+        // Update status based on server response
+        hasGuruPhotos = serverGuruStatus;
+        print("🔍 hasGuruPhotos: $hasGuruPhotos (server: $serverGuruStatus)");
       }
       final siswaFormData = FormData.fromMap({
         'admin_email': adminEmail,
         'type': 'siswa',
       });
       final siswaResp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_photos_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_photos_status.php',
         data: siswaFormData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -288,8 +311,12 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       if (siswaResp.statusCode == 200) {
         final siswaData = json.decode(siswaResp.data);
         print("🔍 Siswa Photos Status Response: $siswaData");
-        hasSiswaPhotos = siswaData['has_data'] ?? false;
-        print("🔍 hasSiswaPhotos: $hasSiswaPhotos");
+        bool serverSiswaStatus = siswaData['has_data'] ?? false;
+        // Update status based on server response
+        hasSiswaPhotos = serverSiswaStatus;
+        print(
+          "🔍 hasSiswaPhotos: $hasSiswaPhotos (server: $serverSiswaStatus)",
+        );
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('has_guru_photos', hasGuruPhotos);
@@ -312,7 +339,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         'type': type,
       });
       final resp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_photos_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_photos_status.php',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -366,7 +393,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       print("🔧 DEBUG: Sending request with adminEmail: $adminEmail");
 
       final resp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/check_upload_status.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/check_upload_status.php',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
@@ -423,138 +450,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
     }
   }
 
-  Future<void> uploadAll() async {
-    if (zipGuru == null && zipSiswa == null) {
-      Fluttertoast.showToast(
-        msg: "Pilih minimal satu file ZIP terlebih dahulu.",
-      );
-      return;
-    }
-    if (adminEmail == null) {
-      Fluttertoast.showToast(msg: "Email admin tidak ditemukan");
-      return;
-    }
-
-    // Show import mode dialog first
-    await _showImportModeDialog(() => _processAllPhotos());
-  }
-
-  Future<void> _processAllPhotos() async {
-    setState(() => isUploading = true);
-    final dio = Dio();
-    Future<void> processPhotos(String type, File file) async {
-      String endpoint;
-      FormData formData;
-      bool hasExistingData = (type == 'guru') ? hasGuruPhotos : hasSiswaPhotos;
-      if (hasExistingData) {
-        endpoint =
-            'http://10.167.91.233/aplikasi-checkin/pages/admin/update_photos_guru_siswa.php';
-        formData = FormData.fromMap({
-          'admin_email': adminEmail,
-          'type': type,
-          'import_mode': importMode, // Add import mode parameter
-          'photos': await MultipartFile.fromFile(
-            file.path,
-            filename: file.path.split('/').last,
-          ),
-        });
-      } else {
-        if (type == 'guru') {
-          endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/admin/upload_teacher_photos.php';
-        } else {
-          endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/admin/upload_student_photos.php';
-        }
-        formData = FormData.fromMap({
-          'import_mode': importMode, // Add import mode parameter
-          'zipfile': await MultipartFile.fromFile(
-            file.path,
-            filename: file.path.split('/').last,
-          ),
-        });
-      }
-      try {
-        final resp = await dio.post(
-          endpoint,
-          data: formData,
-          options: Options(
-            contentType: 'multipart/form-data',
-            responseType: ResponseType.plain,
-          ),
-        );
-        print("Process Photos Status Code [$type]: ${resp.statusCode}");
-        print("Process Photos Response Raw Data [$type]: ${resp.data}");
-        if (resp.data == null || resp.data.toString().trim().isEmpty) {
-          Fluttertoast.showToast(msg: "[$type] Tidak ada respons dari server.");
-          return;
-        }
-        late Map<String, dynamic> json;
-        try {
-          json = jsonDecode(resp.data.toString());
-        } catch (e) {
-          Fluttertoast.showToast(msg: "[$type] Format respon tidak valid.");
-          print("🛑 [$type] JSON Decode Error: $e");
-          return;
-        }
-        if (json['status'] == 'success') {
-          String successMsg = "✅ $type berhasil diproses!\n";
-          if (hasExistingData) {
-            final data = json['data'];
-            if (data != null) {
-              successMsg += "📊 Diproses: ${data['processed']}, ";
-              successMsg += "Diupdate: ${data['updated']}, ";
-              successMsg += "Tidak ditemukan: ${data['not_found']}";
-            }
-          } else {
-            successMsg += "📊 Import awal foto $type berhasil";
-          }
-          Fluttertoast.showToast(
-            msg: successMsg,
-            toastLength: Toast.LENGTH_LONG,
-          );
-          if (type == 'guru') {
-            hasGuruPhotos = true;
-          } else if (type == 'siswa') {
-            hasSiswaPhotos = true;
-          }
-        } else {
-          Fluttertoast.showToast(
-            msg: "❌ $type gagal: ${json['message']}",
-            toastLength: Toast.LENGTH_LONG,
-          );
-        }
-        if (json.containsKey('log')) {
-          print("📝 [$type] Log Backend:");
-          for (var line in json['log']) {
-            print("  • $line");
-          }
-        }
-      } catch (e) {
-        print("❌ [$type] Process error: $e");
-        Fluttertoast.showToast(
-          msg: "❌ $type gagal: $e",
-          toastLength: Toast.LENGTH_LONG,
-        );
-      }
-    }
-
-    if (zipGuru != null) await processPhotos('guru', zipGuru!);
-    if (zipSiswa != null) await processPhotos('siswa', zipSiswa!);
-    setState(() {
-      zipGuru = null;
-      zipGuruName = null;
-      zipSiswa = null;
-      zipSiswaName = null;
-      isUploading = false;
-    });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('has_guru_photos', hasGuruPhotos);
-    await prefs.setBool('has_siswa_photos', hasSiswaPhotos);
-    await checkExistingPhotos();
-  }
-
-  Future<void> updatePhotos(String type) async {
+  Future<void> uploadIndividualPhoto(String type) async {
     if (adminEmail == null) {
       Fluttertoast.showToast(msg: "Email admin tidak ditemukan");
       return;
@@ -567,9 +463,175 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       return;
     }
 
-    // Show import mode dialog first
-    await _showImportModeDialog(
-      () => _processPhotosUpdate(type, selectedFile!),
+    // Check if photos already exist
+    bool hasExisting = false;
+    if (type == 'guru') hasExisting = hasGuruPhotos;
+    if (type == 'siswa') hasExisting = hasSiswaPhotos;
+
+    // Initialize upload status
+    uploadProgress[type] = 0.0;
+    uploadStatus[type] = 'loading';
+    uploadMessages[type] =
+        hasExisting
+            ? 'Mempersiapkan update foto $type...'
+            : 'Mempersiapkan upload foto $type...';
+    setState(() {});
+
+    if (hasExisting) {
+      // If photos exist, show import mode dialog for update
+      final shouldProceed = await _showImportModeDialog(
+        () => _processPhotosUpdate(type, selectedFile!),
+      );
+      if (!shouldProceed) {
+        setState(() {
+          uploadProgress.remove(type);
+          uploadStatus.remove(type);
+          uploadMessages.remove(type);
+        });
+        print("⚠️ User cancelled import dialog for $type");
+        return;
+      }
+    } else {
+      // If no photos exist, direct upload
+      await _processIndividualPhotoUpload(type, selectedFile);
+    }
+  }
+
+  Future<void> _processIndividualPhotoUpload(
+    String type,
+    File selectedFile,
+  ) async {
+    setState(() => isUploading = true);
+    final dio = Dio();
+
+    try {
+      uploadProgress[type] = 0.3;
+      uploadMessages[type] = 'Mengirim file ZIP ke server...';
+      setState(() {});
+
+      String endpoint;
+      FormData formData;
+
+      if (type == 'guru') {
+        endpoint =
+            'http://192.168.1.17/aplikasi-checkin/pages/admin/upload_teacher_photos.php';
+      } else {
+        endpoint =
+            'http://192.168.1.17/aplikasi-checkin/pages/admin/upload_student_photos.php';
+      }
+
+      formData = FormData.fromMap({
+        'import_mode': importMode,
+        'zipfile': await MultipartFile.fromFile(
+          selectedFile.path,
+          filename: selectedFile.path.split('/').last,
+        ),
+      });
+
+      final resp = await dio.post(
+        endpoint,
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+          responseType: ResponseType.plain,
+        ),
+      );
+
+      uploadProgress[type] = 0.8;
+      uploadMessages[type] = 'Memproses foto $type...';
+      setState(() {});
+
+      print("Upload Photos Status Code [$type]: ${resp.statusCode}");
+      print("Upload Photos Response Raw Data [$type]: ${resp.data}");
+
+      if (resp.data == null || resp.data.toString().trim().isEmpty) {
+        uploadStatus[type] = 'error';
+        uploadMessages[type] = 'Tidak ada respons dari server';
+        Fluttertoast.showToast(msg: "[$type] Tidak ada respons dari server.");
+        return;
+      }
+
+      late Map<String, dynamic> json;
+      try {
+        json = jsonDecode(resp.data.toString());
+      } catch (e) {
+        uploadStatus[type] = 'error';
+        uploadMessages[type] = 'Format respon tidak valid';
+        Fluttertoast.showToast(msg: "[$type] Format respon tidak valid.");
+        print("🛑 [$type] JSON Decode Error: $e");
+        return;
+      }
+
+      if (json['status'] == 'success') {
+        uploadProgress[type] = 1.0;
+        uploadStatus[type] = 'success';
+        uploadMessages[type] = 'Berhasil diunggah!';
+        setState(() {});
+
+        String successMsg =
+            "✅ Upload foto $type berhasil!\n📊 Import awal foto $type berhasil";
+        Fluttertoast.showToast(msg: successMsg, toastLength: Toast.LENGTH_LONG);
+
+        setState(() {
+          if (type == 'guru') {
+            zipGuru = null;
+            zipGuruName = null;
+            hasGuruPhotos = true;
+          }
+          if (type == 'siswa') {
+            zipSiswa = null;
+            zipSiswaName = null;
+            hasSiswaPhotos = true;
+          }
+        });
+
+        final prefs = await SharedPreferences.getInstance();
+        if (type == 'guru') {
+          await prefs.setBool('has_guru_photos', true);
+        } else if (type == 'siswa') {
+          await prefs.setBool('has_siswa_photos', true);
+        }
+      } else {
+        uploadStatus[type] = 'error';
+        uploadMessages[type] = json['message'] ?? 'Upload gagal';
+        Fluttertoast.showToast(
+          msg: "❌ Upload foto $type gagal: ${json['message']}",
+          toastLength: Toast.LENGTH_LONG,
+        );
+      }
+
+      if (json.containsKey('log')) {
+        print("📝 [$type] Log Backend:");
+        for (var line in json['log']) {
+          print("  • $line");
+        }
+      }
+    } catch (e) {
+      uploadStatus[type] = 'error';
+      uploadMessages[type] = 'Error: $e';
+      print("❌ [$type] Upload error: $e");
+      Fluttertoast.showToast(
+        msg: "❌ Upload foto $type gagal: $e",
+        toastLength: Toast.LENGTH_LONG,
+      );
+    }
+
+    setState(() => isUploading = false);
+
+    // Clear upload status after completion
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          uploadProgress.remove(type);
+          uploadStatus.remove(type);
+          uploadMessages.remove(type);
+        });
+      }
+    });
+
+    setState(() {});
+    print(
+      "🔍 Individual upload completed for $type - Final status: hasGuruPhotos: $hasGuruPhotos, hasSiswaPhotos: $hasSiswaPhotos",
     );
   }
 
@@ -579,21 +641,29 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
     final formData = FormData.fromMap({
       'admin_email': adminEmail,
       'type': type,
-      'import_mode': importMode, // Add import mode parameter
+      'import_mode': importMode,
       'photos': await MultipartFile.fromFile(
         selectedFile.path,
         filename: selectedFile.path.split('/').last,
       ),
     });
     try {
+      uploadProgress[type] = 0.3;
+      uploadMessages[type] = 'Mengirim file ke server...';
+      setState(() {});
+
       final resp = await dio.post(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/update_photos_guru_siswa.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/update_photos_guru_siswa.php',
         data: formData,
         options: Options(
           contentType: 'multipart/form-data',
           responseType: ResponseType.plain,
         ),
       );
+
+      uploadProgress[type] = 0.8;
+      uploadMessages[type] = 'Memproses update foto...';
+      setState(() {});
       print("Update Photos Status Code [$type]: ${resp.statusCode}");
       print("Update Photos Response Raw Data [$type]: ${resp.data}");
       if (resp.data == null || resp.data.toString().trim().isEmpty) {
@@ -609,6 +679,11 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         return;
       }
       if (json['status'] == 'success') {
+        uploadProgress[type] = 1.0;
+        uploadStatus[type] = 'success';
+        uploadMessages[type] = 'Update berhasil!';
+        setState(() {});
+
         final data = json['data'];
         String successMsg = "✅ Update foto $type berhasil!\n";
         if (data != null) {
@@ -636,6 +711,10 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
           await prefs.setBool('has_siswa_photos', true);
         }
       } else {
+        uploadStatus[type] = 'error';
+        uploadMessages[type] = json['message'] ?? 'Update gagal';
+        setState(() {});
+
         Fluttertoast.showToast(
           msg: "❌ Update $type gagal: ${json['message']}",
           toastLength: Toast.LENGTH_LONG,
@@ -648,6 +727,10 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
         }
       }
     } catch (e) {
+      uploadStatus[type] = 'error';
+      uploadMessages[type] = 'Error: $e';
+      setState(() {});
+
       Fluttertoast.showToast(
         msg: "❌ Update foto $type gagal: $e",
         toastLength: Toast.LENGTH_LONG,
@@ -655,7 +738,24 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       print("❌ Update Photos Error [$type]: $e");
     }
     setState(() => isUploading = false);
-    await checkExistingPhotos();
+
+    // Clear upload status after completion
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          uploadProgress.remove(type);
+          uploadStatus.remove(type);
+          uploadMessages.remove(type);
+        });
+      }
+    });
+
+    // Force update state after successful update
+    setState(() {});
+
+    print(
+      "🔍 Update completed for $type - Final status: hasGuruPhotos: $hasGuruPhotos, hasSiswaPhotos: $hasSiswaPhotos",
+    );
   }
 
   Future<void> downloadZip(String type) async {
@@ -670,7 +770,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
       }
       final dio = Dio();
       final url =
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/download_photos_zip.php?file=$type';
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/download_photos_zip.php?file=$type';
       final tempDir = await getTemporaryDirectory();
       final tempPath = '${tempDir.path}/$type.zip';
       print("🔄 Mencoba download file ZIP: $type");
@@ -790,12 +890,20 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
     required bool hasExistingPhotos,
     VoidCallback? onUpdate,
   }) {
+    String type = '';
+    if (label.contains('Guru')) type = 'guru';
+    if (label.contains('Siswa')) type = 'siswa';
+
     bool isDownloading = false;
     if (label.contains('Guru')) {
       isDownloading = isDownloadingGuru;
     } else if (label.contains('Siswa')) {
       isDownloading = isDownloadingSiswa;
     }
+
+    String? currentStatus = uploadStatus[type];
+    String? currentMessage = uploadMessages[type];
+    double? currentProgress = uploadProgress[type];
     return Card(
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -838,6 +946,84 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                       ),
                     ),
                   ),
+                if (currentStatus != null && currentMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color:
+                          currentStatus == 'success'
+                              ? Colors.green.withOpacity(0.1)
+                              : currentStatus == 'error'
+                              ? Colors.red.withOpacity(0.1)
+                              : Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color:
+                            currentStatus == 'success'
+                                ? Colors.green.withOpacity(0.3)
+                                : currentStatus == 'error'
+                                ? Colors.red.withOpacity(0.3)
+                                : Colors.blue.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (currentStatus == 'loading')
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.blue,
+                                  ),
+                                ),
+                              )
+                            else if (currentStatus == 'success')
+                              Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                                size: 14,
+                              )
+                            else if (currentStatus == 'error')
+                              Icon(Icons.error, color: Colors.red, size: 14),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                currentMessage,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      currentStatus == 'success'
+                                          ? Colors.green[700]
+                                          : currentStatus == 'error'
+                                          ? Colors.red[700]
+                                          : Colors.blue[700],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (currentStatus == 'loading' &&
+                            currentProgress != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: LinearProgressIndicator(
+                              value: currentProgress,
+                              backgroundColor: Colors.grey.withOpacity(0.3),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.blue,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 if (isDownloading)
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -846,9 +1032,9 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -859,7 +1045,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.blue,
+                              Colors.orange,
                             ),
                           ),
                         ),
@@ -868,7 +1054,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                           'Mengunduh...',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.blue,
+                            color: Colors.orange,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -882,49 +1068,81 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.drive_file_move_outline),
-                  onPressed: isDownloading ? null : onPick,
-                  tooltip: "Pilih File ZIP",
-                  color: isDownloading ? Colors.grey : Colors.green,
+                  onPressed:
+                      (isDownloading ||
+                              isUploading ||
+                              (currentStatus == 'loading'))
+                          ? null
+                          : onPick,
+                  tooltip: "Pilih File ZIP (max 1 MB per foto)",
+                  color:
+                      (isDownloading ||
+                              isUploading ||
+                              (currentStatus == 'loading'))
+                          ? Colors.grey
+                          : Colors.green,
                 ),
                 IconButton(
                   icon:
-                      isDownloading
+                      (isDownloading || (currentStatus == 'loading'))
                           ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                           : const Icon(Icons.download),
-                  onPressed: isDownloading ? null : onDownload,
-                  tooltip: "Unduh Template ZIP",
-                  color: isDownloading ? Colors.grey : Colors.blue,
+                  onPressed:
+                      (isDownloading ||
+                              isUploading ||
+                              (currentStatus == 'loading') ||
+                              !hasExistingPhotos)
+                          ? null
+                          : onDownload,
+                  tooltip:
+                      hasExistingPhotos
+                          ? "Unduh Template ZIP"
+                          : "Belum ada foto untuk diunduh",
+                  color:
+                      (isDownloading ||
+                              isUploading ||
+                              (currentStatus == 'loading') ||
+                              !hasExistingPhotos)
+                          ? Colors.grey
+                          : Colors.blue,
                 ),
+                if (file != null)
+                  IconButton(
+                    icon:
+                        (isUploading || (currentStatus == 'loading'))
+                            ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : Icon(
+                              hasExistingPhotos
+                                  ? Icons.update
+                                  : Icons.cloud_upload,
+                            ),
+                    onPressed:
+                        (isDownloading ||
+                                isUploading ||
+                                (currentStatus == 'loading'))
+                            ? null
+                            : () => uploadIndividualPhoto(type),
+                    tooltip: hasExistingPhotos ? "Update Foto" : "Upload Foto",
+                    color:
+                        (isDownloading ||
+                                isUploading ||
+                                (currentStatus == 'loading'))
+                            ? Colors.grey
+                            : (hasExistingPhotos
+                                ? Colors.orange
+                                : Colors.indigo),
+                  ),
               ],
             ),
           ),
-          if (hasExistingPhotos && onUpdate != null && file != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: (isUploading || isDownloading) ? null : onUpdate,
-                  icon: const Icon(Icons.update, size: 18),
-                  label: Text('Update Foto ${label.split(' ')[1]}'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        (isUploading || isDownloading)
-                            ? Colors.grey
-                            : Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -996,7 +1214,7 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                   icon: Icons.person,
                   color: Colors.indigo,
                   hasExistingPhotos: hasGuruPhotos,
-                  onUpdate: () => updatePhotos('guru'),
+                  onUpdate: () => uploadIndividualPhoto('guru'),
                 ),
                 buildZipTile(
                   label: 'Foto Siswa (.zip)',
@@ -1007,29 +1225,51 @@ class _AdminImportPhotosPageState extends State<AdminImportPhotosPage> {
                   icon: Icons.group,
                   color: Colors.deepPurple,
                   hasExistingPhotos: hasSiswaPhotos,
-                  onUpdate: () => updatePhotos('siswa'),
+                  onUpdate: () => uploadIndividualPhoto('siswa'),
                 ),
                 const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.photo_library),
-                  label: Text(
-                    hasGuruPhotos || hasSiswaPhotos
-                        ? "Proses Semua Foto (Update)"
-                        : "Proses Semua Foto (Import Awal)",
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
                   ),
-                  onPressed: isUploading ? null : uploadAll,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.blue.shade700,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Panduan Format File:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '• Format file: ZIP (.zip)\n• Maksimal ukuran per foto: 1 MB\n• Nama foto harus sesuai dengan nama di data excel\n• Format foto: JPG, JPEG, PNG',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: 11,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 16),
                 if (isUploading)
                   const Padding(
                     padding: EdgeInsets.only(top: 16),

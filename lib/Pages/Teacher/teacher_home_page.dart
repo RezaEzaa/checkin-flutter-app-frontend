@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +7,7 @@ import 'package:checkin/Pages/Teacher/attendance_history_teacher_page.dart';
 import 'package:checkin/Pages/Teacher/recap_attendance_page.dart';
 import 'package:checkin/Pages/Teacher/student_detail_page.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class TeacherHomePage extends StatefulWidget {
   final String email;
@@ -15,11 +16,11 @@ class TeacherHomePage extends StatefulWidget {
   _TeacherHomePageState createState() => _TeacherHomePageState();
 }
 
-class _TeacherHomePageState extends State<TeacherHomePage> {
+class _TeacherHomePageState extends State<TeacherHomePage>
+    with LoadingStateMixin {
   int _selectedIndex = 0;
   bool _isFirstVisit = true;
   int? _activeLabelIndex;
-  bool _isLoading = true;
   Map<String, dynamic>? _profileData;
   @override
   void initState() {
@@ -28,29 +29,30 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   }
 
   Future<void> fetchProfile() async {
-    final response = await http.post(
-      Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/guru/get_profile_guru.php',
-      ),
-      body: {'email': widget.email},
-    );
-    if (response.statusCode == 200) {
-      try {
-        final result = json.decode(response.body);
-        if (result['status'] == 'success') {
-          setState(() {
-            _profileData = result['data'];
-            _isLoading = false;
-          });
-        } else {
-          showError(result['message']);
+    await executeWithLoading('fetchProfile', () async {
+      final response = await http.post(
+        Uri.parse(
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_profile_guru.php',
+        ),
+        body: {'email': widget.email},
+      );
+      if (response.statusCode == 200) {
+        try {
+          final result = json.decode(response.body);
+          if (result['status'] == 'success') {
+            setState(() {
+              _profileData = result['data'];
+            });
+          } else {
+            showError(result['message']);
+          }
+        } catch (e) {
+          showError('Format JSON tidak valid: $e');
         }
-      } catch (e) {
-        showError('Format JSON tidak valid: $e');
+      } else {
+        showError('Gagal terhubung ke server. Status: ${response.statusCode}');
       }
-    } else {
-      showError('Gagal terhubung ke server. Status: ${response.statusCode}');
-    }
+    });
   }
 
   void showError(String message) {
@@ -80,7 +82,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (isLoading('fetchProfile')) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final List<Widget> _pages = [

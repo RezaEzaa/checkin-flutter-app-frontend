@@ -1,74 +1,100 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
-class DownloadTemplatePage extends StatelessWidget {
+class DownloadTemplatePage extends StatefulWidget {
   const DownloadTemplatePage({super.key});
+
+  @override
+  State<DownloadTemplatePage> createState() => _DownloadTemplatePageState();
+}
+
+class _DownloadTemplatePageState extends State<DownloadTemplatePage>
+    with LoadingStateMixin {
   Future<int> _androidVersion() async {
     final deviceInfo = DeviceInfoPlugin();
     final androidInfo = await deviceInfo.androidInfo;
     return androidInfo.version.sdkInt;
   }
 
-  Future<void> downloadFile(BuildContext context, String fileName) async {
-    try {
-      if (Platform.isAndroid && (await _androidVersion() <= 29)) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) throw Exception("Izin penyimpanan ditolak");
+  Future<bool> _downloadFileInternal(String fileName) async {
+    if (Platform.isAndroid && (await _androidVersion() <= 29)) {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) {
+        throw Exception("Izin penyimpanan ditolak");
       }
-      final dio = Dio();
-      final url =
-          "http://10.167.91.233/aplikasi-checkin/pages/admin/download_templates.php?file=$fileName";
-      final directory = await getTemporaryDirectory();
-      final tempPath = "${directory.path}/$fileName";
-      await dio.download(url, tempPath);
-      final params = SaveFileDialogParams(
-        sourceFilePath: tempPath,
-        fileName: fileName,
-      );
-      final savedPath = await FlutterFileDialog.saveFile(params: params);
-      if (savedPath != null) {
-        Fluttertoast.showToast(
-          msg: 'File berhasil disimpan: $fileName',
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-          backgroundColor: Colors.grey,
-        );
-      } else {
-        _showErrorDialog(context, 'Penyimpanan dibatalkan');
-      }
-    } catch (e) {
-      _showErrorDialog(context, 'Gagal mengunduh $fileName: $e');
+    }
+
+    final dio = Dio();
+    final url =
+        "http://192.168.1.17/aplikasi-checkin/pages/admin/download_templates.php?file=$fileName";
+    final directory = await getTemporaryDirectory();
+    final tempPath = "${directory.path}/$fileName";
+
+    await dio.download(
+      url,
+      tempPath,
+      onReceiveProgress: (received, total) {
+        if (total != -1) {
+          final progress = (received / total * 100).toStringAsFixed(1);
+          debugPrint('Download progress: $progress%');
+        }
+      },
+    );
+
+    final params = SaveFileDialogParams(
+      sourceFilePath: tempPath,
+      fileName: fileName,
+    );
+    final savedPath = await FlutterFileDialog.saveFile(params: params);
+
+    if (savedPath != null) {
+      showSuccess('File berhasil disimpan: $fileName');
+      return true;
+    } else {
+      showInfo('Download dibatalkan oleh pengguna');
+      return false;
     }
   }
 
-  Future<void> downloadAllTemplates(BuildContext context) async {
-    await downloadFile(context, 'Data_Sekolah.xlsx');
-    await downloadFile(context, 'Data_Guru.xlsx');
-    await downloadFile(context, 'Data_Siswa.xlsx');
+  Future<void> downloadFile(String fileName) async {
+    await executeWithLoading('Mengunduh $fileName...', () async {
+      await _downloadFileInternal(fileName);
+    });
   }
 
-  void _showErrorDialog(BuildContext context, String message) {
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Terjadi Kesalahan'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
+  Future<void> downloadAllTemplates() async {
+    await executeWithLoading('Mengunduh semua template...', () async {
+      List<String> files = [
+        'Data_Sekolah.xlsx',
+        'Data_Guru.xlsx',
+        'Data_Siswa.xlsx',
+      ];
+      int successCount = 0;
+
+      for (String fileName in files) {
+        bool success = await _downloadFileInternal(fileName);
+        if (success) {
+          successCount++;
+        } else {
+          // User cancelled, stop the process
+          if (successCount > 0) {
+            showInfo(
+              'Download dihentikan. $successCount dari ${files.length} file berhasil diunduh.',
+            );
+          }
+          return;
+        }
+      }
+
+      showSuccess('Semua template berhasil diunduh! ($successCount file)');
+    });
   }
 
   Widget _buildDownloadButton({
@@ -79,18 +105,30 @@ class DownloadTemplatePage extends StatelessWidget {
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: ElevatedButton.icon(
+      child: LoadingButton(
         onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 50),
-          backgroundColor: color ?? Colors.blue,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
+        child: Container(
+          width: double.infinity,
+          height: 50,
+          decoration: BoxDecoration(
+            color: color ?? Colors.blue,
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(fontSize: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -152,26 +190,26 @@ class DownloadTemplatePage extends StatelessWidget {
                 _buildDownloadButton(
                   label: "Unduh Template Data Sekolah",
                   icon: Icons.school,
-                  onPressed: () => downloadFile(context, 'Data_Sekolah.xlsx'),
+                  onPressed: () => downloadFile('Data_Sekolah.xlsx'),
                   color: Colors.teal,
                 ),
                 _buildDownloadButton(
                   label: "Unduh Template Data Guru",
                   icon: Icons.person,
-                  onPressed: () => downloadFile(context, 'Data_Guru.xlsx'),
+                  onPressed: () => downloadFile('Data_Guru.xlsx'),
                   color: Colors.indigo,
                 ),
                 _buildDownloadButton(
                   label: "Unduh Template Data Siswa",
                   icon: Icons.group,
-                  onPressed: () => downloadFile(context, 'Data_Siswa.xlsx'),
+                  onPressed: () => downloadFile('Data_Siswa.xlsx'),
                   color: Colors.deepPurple,
                 ),
                 const Divider(height: 40),
                 _buildDownloadButton(
                   label: "Unduh Semua Template",
                   icon: Icons.download_for_offline_rounded,
-                  onPressed: () => downloadAllTemplates(context),
+                  onPressed: () => downloadAllTemplates(),
                   color: Colors.orange,
                 ),
               ],

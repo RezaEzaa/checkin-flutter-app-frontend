@@ -1,11 +1,11 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:checkin/Pages/settings_page.dart';
 import 'package:checkin/Pages/welcome_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class StudentLoginPage extends StatefulWidget {
   const StudentLoginPage({super.key});
@@ -13,9 +13,9 @@ class StudentLoginPage extends StatefulWidget {
   _StudentLoginPageState createState() => _StudentLoginPageState();
 }
 
-class _StudentLoginPageState extends State<StudentLoginPage> {
+class _StudentLoginPageState extends State<StudentLoginPage>
+    with LoadingStateMixin {
   final TextEditingController emailController = TextEditingController();
-  bool isLoading = false;
   bool rememberMe = false;
 
   @override
@@ -52,66 +52,50 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
       _showErrorDialog("Silakan isi alamat email terlebih dahulu.");
       return;
     }
-    setState(() {
-      isLoading = true;
-    });
-    try {
-      final response = await http.post(
-        Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/siswa/login_siswa.php',
-        ),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email}),
-      );
-      dynamic responseData;
+
+    await executeWithLoading('login', () async {
       try {
-        responseData = jsonDecode(response.body);
-      } catch (e) {
-        _showErrorDialog(
-          "Gagal mengurai respon dari server:\n${response.body}",
-        );
-        return;
-      }
-      if (response.statusCode == 200 &&
-          responseData['message'] == 'Login berhasil') {
-        // Save email if remember me is checked
-        await _saveEmail();
-
-        _showSuccessToast('Login berhasil!');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('siswa_email', email);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) => WelcomePage(
-                  userType: 'Siswa',
-                  namaLengkap: responseData['data']['nama_lengkap'],
-                  userEmail: email,
-                ),
+        final response = await http.post(
+          Uri.parse(
+            'http://192.168.1.17/aplikasi-checkin/pages/siswa/login_siswa.php',
           ),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"email": email}),
         );
-      } else {
-        _showErrorDialog(responseData['message'] ?? 'Email tidak terdaftar.');
-      }
-    } catch (e) {
-      _showErrorDialog('Terjadi kesalahan: $e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
+        dynamic responseData;
+        try {
+          responseData = jsonDecode(response.body);
+        } catch (e) {
+          _showErrorDialog(
+            "Gagal mengurai respon dari server:\n${response.body}",
+          );
+          return;
+        }
+        if (response.statusCode == 200 &&
+            responseData['message'] == 'Login berhasil') {
+          await _saveEmail();
 
-  void _showSuccessToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
-      backgroundColor: Colors.grey,
-      fontSize: 16.0,
-    );
+          showSuccess('Login berhasil!');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('siswa_email', email);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => WelcomePage(
+                    userType: 'Siswa',
+                    namaLengkap: responseData['data']['nama_lengkap'],
+                    userEmail: email,
+                  ),
+            ),
+          );
+        } else {
+          _showErrorDialog(responseData['message'] ?? 'Email tidak terdaftar.');
+        }
+      } catch (e) {
+        _showErrorDialog('Terjadi kesalahan: $e');
+      }
+    });
   }
 
   void _showErrorDialog(String message) {
@@ -215,24 +199,19 @@ class _StudentLoginPageState extends State<StudentLoginPage> {
                 ],
               ),
               const SizedBox(height: 20),
-              isLoading
-                  ? const CircularProgressIndicator()
-                  : SizedBox(
-                    width: 250,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.login),
-                      label: const Text('Masuk'),
-                      onPressed: loginSiswa,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
+              LoadingButton(
+                isLoading: isLoading('login'),
+                loadingText: 'Memverifikasi...',
+                onPressed: loginSiswa,
+                icon: const Icon(Icons.login),
+                minimumSize: const Size(250, 48),
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text('Masuk'),
+              ),
             ],
           ),
         ),

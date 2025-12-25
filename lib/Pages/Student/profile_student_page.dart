@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:checkin/Pages/shared/school_info_page.dart';
 import 'package:checkin/Pages/shared/admin_creator_info_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class ProfileStudentPage extends StatefulWidget {
   final String email;
@@ -16,7 +17,8 @@ class ProfileStudentPage extends StatefulWidget {
   State<ProfileStudentPage> createState() => _ProfileStudentPageState();
 }
 
-class _ProfileStudentPageState extends State<ProfileStudentPage> {
+class _ProfileStudentPageState extends State<ProfileStudentPage>
+    with LoadingStateMixin {
   late String id = '';
   late String fullName = '';
   late String gender = '';
@@ -25,7 +27,6 @@ class _ProfileStudentPageState extends State<ProfileStudentPage> {
   late String prodi = '';
   late String photoUrl = '';
   late String noAbsen = '';
-  bool isLoading = true;
   bool hasSchoolData = false;
   bool hasAdminCreatorInfo = false;
   @override
@@ -37,50 +38,60 @@ class _ProfileStudentPageState extends State<ProfileStudentPage> {
   }
 
   Future<void> fetchProfile() async {
-    setState(() => isLoading = true);
-    final response = await http.post(
-      Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_profile_siswa.php',
-      ),
-      body: {'email': widget.email},
-    );
-    if (response.statusCode == 200) {
-      final responseData = json.decode(response.body);
-      if (responseData['status'] == 'success' && responseData['data'] != null) {
-        final data = responseData['data'];
-        setState(() {
-          id = data['id'].toString();
-          fullName = data['nama_lengkap'];
-          gender = data['jenis_kelamin'];
-          email = data['email'];
-          className = data['kelas'];
-          prodi = data['prodi'] ?? '';
-          photoUrl = data['foto'] ?? '';
-          noAbsen =
-              data['no_absen'] != null ? data['no_absen'].toString() : '-';
-          isLoading = false;
-        });
+    await executeWithLoading('fetchProfile', () async {
+      final response = await http.post(
+        Uri.parse(
+          'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_profile_siswa.php',
+        ),
+        body: {'email': widget.email},
+      );
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData['status'] == 'success' &&
+            responseData['data'] != null) {
+          final data = responseData['data'];
+          setState(() {
+            id = data['id'].toString();
+            fullName = data['nama_lengkap'];
+            gender = data['jenis_kelamin'];
+            email = data['email'];
+            className = data['kelas'];
+            prodi = data['prodi'] ?? '';
+            photoUrl = data['foto'] ?? '';
+            noAbsen =
+                data['no_absen'] != null ? data['no_absen'].toString() : '-';
+          });
+        } else {
+          showError('Gagal memuat data: ${responseData['message']}');
+        }
       } else {
-        setState(() => isLoading = false);
-        print('Gagal memuat data: ${responseData['message']}');
+        showError('Request gagal dengan kode: ${response.statusCode}');
       }
-    } else {
-      setState(() => isLoading = false);
-      print('Request gagal dengan kode: ${response.statusCode}');
-    }
+    });
   }
 
   Future<void> checkSchoolData() async {
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_sekolah_info.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_sekolah_info.php',
         ),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        bool available = false;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('has_data')) {
+            available = data['has_data'] == true;
+          } else {
+            final status = data['status'];
+            final payload = data['data'];
+            final ok = (status == 'success' || status == true);
+            available = ok && payload != null;
+          }
+        }
         setState(() {
-          hasSchoolData = data['has_data'] ?? false;
+          hasSchoolData = available;
         });
       }
     } catch (e) {
@@ -92,7 +103,7 @@ class _ProfileStudentPageState extends State<ProfileStudentPage> {
     try {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_admin_creator.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_admin_creator.php',
         ),
         body: {'email': widget.email},
       );
@@ -169,7 +180,7 @@ class _ProfileStudentPageState extends State<ProfileStudentPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          isLoading
+          isLoading('fetchProfile')
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                 onRefresh: fetchProfile,

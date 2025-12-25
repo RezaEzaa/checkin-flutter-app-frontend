@@ -1,23 +1,31 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class AdminDataViewPage extends StatefulWidget {
   const AdminDataViewPage({Key? key}) : super(key: key);
+
   @override
-  State<AdminDataViewPage> createState() => _AdminDataViewPageState();
+  _AdminDataViewPageState createState() => _AdminDataViewPageState();
 }
 
 class _AdminDataViewPageState extends State<AdminDataViewPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  bool isLoading = false;
+    with TickerProviderStateMixin, LoadingStateMixin {
+  TabController? _tabController;
+
   List<Map<String, dynamic>> teacherList = [];
   List<Map<String, dynamic>> studentList = [];
+
+  bool isLoadingTeachers = true;
+  bool isLoadingStudents = true;
+
+  Set<String> expandedTahunAjaranGuru = {};
   Set<String> expandedProdiGuru = {};
+  Set<String> expandedTahunAjaranSiswa = {};
   Set<String> expandedProdiSiswa = {};
   Set<String> expandedKelasSiswa = {};
+
   @override
   void initState() {
     super.initState();
@@ -28,182 +36,332 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
   Future<void> fetchTeachers() async {
-    if (!mounted) return;
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoadingTeachers = true);
     try {
+      print('🔄 Fetching teachers from API...');
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/get_teachers.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/get_teachers.php?',
         ),
       );
+
+      print('📥 Teachers API Response Status: ${response.statusCode}');
+      print('📥 Teachers API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          if (mounted) {
-            setState(() {
-              teacherList = List<Map<String, dynamic>>.from(data['data']);
-            });
+        print('📊 Parsed Teachers Data: $data');
+
+        setState(() {
+          if (data['status'] == 'success' && data['data'] != null) {
+            teacherList = List<Map<String, dynamic>>.from(data['data']);
+            print('✅ Teachers loaded: ${teacherList.length} items');
+          } else {
+            teacherList = [];
+            print(
+              '❌ Teachers API returned: ${data['status']} - ${data['message'] ?? 'No message'}',
+            );
           }
-        } else {
-          showToast('Gagal mengambil data guru: ${data['message']}');
-        }
+          isLoadingTeachers = false;
+        });
       } else {
-        showToast('Gagal terhubung ke server');
+        setState(() {
+          teacherList = [];
+          isLoadingTeachers = false;
+        });
+        print('❌ Teachers API HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
-      showToast('Error: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      setState(() {
+        teacherList = [];
+        isLoadingTeachers = false;
+      });
+      print('❌ Teachers API Exception: $e');
+      showError('Error loading teachers: $e');
     }
   }
 
   Future<void> fetchStudents() async {
-    if (!mounted) return;
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoadingStudents = true);
     try {
+      print('🔄 Fetching students from API...');
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/get_students.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/get_students.php',
         ),
       );
+
+      print('📥 Students API Response Status: ${response.statusCode}');
+      print('📥 Students API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          if (mounted) {
-            setState(() {
-              studentList = List<Map<String, dynamic>>.from(data['data']);
-            });
+        print('📊 Parsed Students Data: $data');
+
+        setState(() {
+          if (data['status'] == 'success' && data['data'] != null) {
+            studentList = List<Map<String, dynamic>>.from(data['data']);
+            print('✅ Students loaded: ${studentList.length} items');
+          } else {
+            studentList = [];
+            print(
+              '❌ Students API returned: ${data['status']} - ${data['message'] ?? 'No message'}',
+            );
           }
-        } else {
-          showToast('Gagal mengambil data siswa: ${data['message']}');
-        }
+          isLoadingStudents = false;
+        });
       } else {
-        showToast('Gagal terhubung ke server');
+        setState(() {
+          studentList = [];
+          isLoadingStudents = false;
+        });
+        print('❌ Students API HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
-      showToast('Error: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      setState(() {
+        studentList = [];
+        isLoadingStudents = false;
+      });
+      print('❌ Students API Exception: $e');
+      showError('Error loading students: $e');
     }
-  }
-
-  void showToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.grey[700],
-      textColor: Colors.white,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    print('🏗️ Building UI - isLoading: $isLoading');
+    print('🏗️ Teachers count: ${teacherList.length}');
+    print('🏗️ Students count: ${studentList.length}');
+
     return Scaffold(
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          const Icon(
-            Icons.admin_panel_settings_rounded,
-            color: Colors.blue,
-            size: 40,
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Manajemen Data Akun',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          TabBar(
-            controller: _tabController,
-            labelColor:
-                Theme.of(context).brightness == Brightness.light
-                    ? Colors.indigo
-                    : Colors.white,
-            unselectedLabelColor: Colors.grey,
-            indicatorSize: TabBarIndicatorSize.tab,
-            indicatorColor: Theme.of(context).colorScheme.secondary,
-            tabs: const [
-              Tab(text: "Guru", icon: Icon(Icons.school)),
-              Tab(text: "Siswa", icon: Icon(Icons.people)),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Column(
+          children: [
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildTeacherListView(),
-                isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildStudentListView(),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.dashboard,
+                    size: 24,
+                    color: Colors.cyan,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                const Text(
+                  "Data Management",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Kelola Data Guru & Siswa",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
+        centerTitle: true,
+        toolbarHeight: 80,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: TabBar(
+              controller: _tabController,
+              labelColor:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Colors.blue.shade300
+                      : Colors.blue.shade700,
+              unselectedLabelColor:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
+              indicatorColor:
+                  Theme.of(context).brightness == Brightness.dark
+                      ? Colors.blue.shade300
+                      : Colors.blue.shade700,
+              indicatorWeight: 3,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+                color:
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Colors.blue.shade900.withOpacity(0.3)
+                        : Colors.blue.shade50,
+              ),
+              labelStyle: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              tabs: [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue.shade800.withOpacity(0.3)
+                                  : Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.person_outline,
+                          size: 20,
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue.shade300
+                                  : Colors.blue.shade700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Guru'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.orange.shade800.withOpacity(0.3)
+                                  : Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.school_outlined,
+                          size: 20,
+                          color:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.orange.shade300
+                                  : Colors.orange.shade700,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('Siswa'),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
+      body:
+          isLoadingTeachers && isLoadingStudents
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                onRefresh: () async {
+                  await Future.wait([fetchTeachers(), fetchStudents()]);
+                },
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [_buildTeacherListView(), _buildStudentListView()],
+                ),
+              ),
     );
   }
 
   Widget _buildTeacherListView() {
+    print(
+      '🎯 Building Teacher ListView - teacherList.length: ${teacherList.length}',
+    );
+
     final Map<String, List<Map<String, dynamic>>> groupedByProdi = {};
+
     for (var guru in teacherList) {
       final prodi = guru['prodi'] ?? 'Unknown';
       groupedByProdi.putIfAbsent(prodi, () => []).add(guru);
     }
+
+    print('🎯 Grouped teachers data: $groupedByProdi');
+
     if (groupedByProdi.isEmpty) {
+      print('❌ No teachers data to display');
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(Icons.search_off, size: 64, color: Colors.grey),
+            Icon(Icons.group_off, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text(
-              "Tidak ada data guru yang sesuai dengan pencarian",
-              style: TextStyle(color: Colors.grey),
+              "Belum ada data guru",
+              style: TextStyle(color: Colors.grey, fontSize: 18),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Data guru akan muncul setelah diimpor oleh admin",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
+
     List<String> sortedProdiKeys = groupedByProdi.keys.toList()..sort();
+
     return ListView(
       padding: const EdgeInsets.all(8),
       children:
           sortedProdiKeys.map((prodi) {
             final guruList = groupedByProdi[prodi]!;
-            final isExpanded = expandedProdiGuru.contains(prodi);
+            final isExpandedProdi = expandedProdiGuru.contains(prodi);
+
             return Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              elevation: 4,
-              margin: const EdgeInsets.symmetric(vertical: 6),
+              elevation: 5,
+              margin: const EdgeInsets.symmetric(vertical: 8),
               child: Column(
                 children: [
                   InkWell(
                     onTap: () {
                       setState(() {
-                        if (isExpanded) {
+                        if (isExpandedProdi) {
                           expandedProdiGuru.remove(prodi);
                         } else {
                           expandedProdiGuru.add(prodi);
@@ -212,253 +370,223 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: ListTile(
-                      leading: const Icon(Icons.badge, color: Colors.indigo),
+                      leading: const Icon(Icons.school),
                       title: Text(
-                        '$prodi',
+                        prodi,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      subtitle: Text('${guruList.length} guru'),
                       trailing: Icon(
-                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        isExpandedProdi ? Icons.expand_less : Icons.expand_more,
                       ),
                     ),
                   ),
-                  if (isExpanded)
+                  if (isExpandedProdi)
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 5,
+                        horizontal: 8,
+                        vertical: 8,
                       ),
                       child: Column(
                         children:
-                            guruList.map((guru) {
-                              final photoUrl =
-                                  guru['foto'] ??
-                                  'http://10.167.91.233/aplikasi-checkin/uploads/guru/default.png';
-                              return Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                child: InkWell(
-                                  onTap: () {
-                                    showDialog(
-                                      context: context,
-                                      builder:
-                                          (_) => Dialog(
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                            child: SingleChildScrollView(
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  16.0,
-                                                ),
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const SizedBox(height: 16),
-                                                    Hero(
-                                                      tag: 'guru-${guru['id']}',
-                                                      child: CircleAvatar(
-                                                        backgroundImage:
-                                                            NetworkImage(
-                                                              photoUrl,
-                                                            ),
-                                                        radius: 60,
-                                                        onBackgroundImageError:
-                                                            (_, __) {},
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 16),
-                                                    Text(
-                                                      guru['nama_lengkap'] ??
-                                                          'Tidak Ada Nama',
-                                                      style: const TextStyle(
-                                                        fontSize: 20,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                    ),
-                                                    const SizedBox(height: 20),
-                                                    _buildDetailItem(
-                                                      icon: Icons.email,
-                                                      title: 'Email',
-                                                      value:
-                                                          guru['email'] ?? '-',
-                                                      color: Colors.orange,
-                                                    ),
-                                                    const Divider(),
-                                                    _buildDetailItem(
-                                                      icon: Icons.badge,
-                                                      title: 'Prodi',
-                                                      value:
-                                                          guru['prodi'] ?? '-',
-                                                      color: Colors.indigo,
-                                                    ),
-                                                    const Divider(),
-                                                    _buildDetailItem(
-                                                      icon:
-                                                          guru['jenis_kelamin'] ==
-                                                                  'L'
-                                                              ? Icons.male
-                                                              : Icons.female,
-                                                      title: 'Jenis Kelamin',
-                                                      value:
-                                                          guru['jenis_kelamin'] ==
-                                                                  'L'
-                                                              ? 'Laki-laki'
-                                                              : 'Perempuan',
-                                                      color:
-                                                          guru['jenis_kelamin'] ==
-                                                                  'L'
-                                                              ? Colors.blue
-                                                              : Colors.pink,
-                                                    ),
-                                                    const SizedBox(height: 16),
-                                                    const SizedBox(height: 12),
-                                                    SizedBox(
-                                                      width: double.infinity,
-                                                      child: ElevatedButton.icon(
-                                                        icon: const Icon(
-                                                          Icons.edit,
-                                                          color: Colors.white,
-                                                        ),
-                                                        label: const Text(
-                                                          'Edit Data Guru',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                          ),
-                                                        ),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor:
-                                                              Colors.orange,
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        onPressed: () {
-                                                          Navigator.pop(
-                                                            context,
-                                                          );
-                                                          _showEditGuruDialog(
-                                                            guru,
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                    SizedBox(
-                                                      width: double.infinity,
-                                                      child: ElevatedButton(
-                                                        onPressed:
-                                                            () => Navigator.pop(
-                                                              context,
-                                                            ),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor:
-                                                              Colors.blueAccent,
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        child: const Text(
-                                                          'Tutup',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                    );
-                                  },
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          backgroundImage: NetworkImage(
-                                            photoUrl,
-                                          ),
-                                          radius: 25,
-                                          onBackgroundImageError: (_, __) {},
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      guru['nama_lengkap'] ??
-                                                          'Tidak Ada Nama',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 16,
-                                                      ),
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Icon(
-                                                    guru['jenis_kelamin'] == 'L'
-                                                        ? Icons.male
-                                                        : Icons.female,
-                                                    color:
-                                                        guru['jenis_kelamin'] ==
-                                                                'L'
-                                                            ? Colors.blue
-                                                            : Colors.pink,
-                                                    size: 16,
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                guru['email'] ??
-                                                    'Tidak Ada Email',
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const Icon(
-                                          Icons.arrow_forward_ios,
-                                          size: 16,
-                                          color: Colors.grey,
-                                        ),
-                                      ],
-                                    ),
+                            (guruList..sort(
+                                  (a, b) => (a['nama_lengkap'] ?? '').compareTo(
+                                    b['nama_lengkap'] ?? '',
                                   ),
-                                ),
-                              );
-                            }).toList(),
+                                ))
+                                .map((guru) {
+                                  final photoUrl =
+                                      guru['foto'] ??
+                                      'http://192.168.1.17/aplikasi-checkin/uploads/guru/default.png';
+                                  return Card(
+                                    elevation: 1,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: InkWell(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder:
+                                              (_) => Dialog(
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                                child: SingleChildScrollView(
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          16.0,
+                                                        ),
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const SizedBox(
+                                                          height: 16,
+                                                        ),
+                                                        Stack(
+                                                          alignment:
+                                                              Alignment
+                                                                  .bottomRight,
+                                                          children: [
+                                                            Hero(
+                                                              tag:
+                                                                  'guru-${guru['id']}',
+                                                              child: CircleAvatar(
+                                                                backgroundImage:
+                                                                    NetworkImage(
+                                                                      photoUrl,
+                                                                    ),
+                                                                radius: 60,
+                                                                onBackgroundImageError:
+                                                                    (_, __) {},
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 16,
+                                                        ),
+                                                        Text(
+                                                          guru['nama_lengkap'] ??
+                                                              'Tidak Ada Nama',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 20,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 20,
+                                                        ),
+                                                        _buildDetailItem(
+                                                          icon: Icons.email,
+                                                          title: 'Email',
+                                                          value:
+                                                              guru['email'] ??
+                                                              '-',
+                                                        ),
+                                                        const Divider(),
+                                                        _buildDetailItem(
+                                                          icon: Icons.school,
+                                                          title: 'Prodi',
+                                                          value: prodi,
+                                                        ),
+                                                        const Divider(),
+                                                        _buildDetailItem(
+                                                          icon:
+                                                              guru['jenis_kelamin'] ==
+                                                                      'L'
+                                                                  ? Icons.male
+                                                                  : Icons
+                                                                      .female,
+                                                          title:
+                                                              'Jenis Kelamin',
+                                                          value:
+                                                              guru['jenis_kelamin'] ==
+                                                                      'L'
+                                                                  ? 'Laki-laki'
+                                                                  : 'Perempuan',
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 16,
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 12,
+                                                        ),
+                                                        SizedBox(
+                                                          width:
+                                                              double.infinity,
+                                                          child: ElevatedButton.icon(
+                                                            icon: const Icon(
+                                                              Icons.edit,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
+                                                            label: const Text(
+                                                              'Edit Data Guru',
+                                                              style: TextStyle(
+                                                                color:
+                                                                    Colors
+                                                                        .white,
+                                                              ),
+                                                            ),
+                                                            style: ElevatedButton.styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.orange,
+                                                              shape: RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      8,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                            onPressed: () {
+                                                              Navigator.pop(
+                                                                context,
+                                                              );
+                                                              _showTeacherEditDialog(
+                                                                guru,
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: ListTile(
+                                        leading: Hero(
+                                          tag: 'guru-${guru['id']}',
+                                          child: CircleAvatar(
+                                            backgroundImage: NetworkImage(
+                                              photoUrl,
+                                            ),
+                                            radius: 25,
+                                            onBackgroundImageError: (_, __) {},
+                                          ),
+                                        ),
+                                        title: Text(
+                                          guru['nama_lengkap'] ??
+                                              'Tidak Ada Nama',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          guru['email'] ?? '-',
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                        trailing: Icon(
+                                          guru['jenis_kelamin'] == 'L'
+                                              ? Icons.male
+                                              : Icons.female,
+                                          color:
+                                              guru['jenis_kelamin'] == 'L'
+                                                  ? Colors.blue
+                                                  : Colors.pink,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
                       ),
                     ),
                 ],
@@ -469,502 +597,112 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
   }
 
   Widget _buildStudentListView() {
-    final Map<String, Map<String, List<Map<String, dynamic>>>>
-    groupedByProdiKelas = {};
+    print(
+      '🎯 Building Student ListView - studentList.length: ${studentList.length}',
+    );
+
+    final Map<String, Map<String, Map<String, List<Map<String, dynamic>>>>>
+    groupedByTahunAjaranProdiKelas = {};
+
     for (var siswa in studentList) {
+      final tahunAjaran = siswa['tahun_ajaran'] ?? 'Unknown';
       final prodi = siswa['prodi'] ?? 'Unknown';
       final kelas = siswa['kelas'] ?? 'Unknown';
-      groupedByProdiKelas.putIfAbsent(prodi, () => {});
-      groupedByProdiKelas[prodi]!.putIfAbsent(kelas, () => []).add(siswa);
+
+      groupedByTahunAjaranProdiKelas.putIfAbsent(tahunAjaran, () => {});
+      groupedByTahunAjaranProdiKelas[tahunAjaran]!.putIfAbsent(prodi, () => {});
+      groupedByTahunAjaranProdiKelas[tahunAjaran]![prodi]!
+          .putIfAbsent(kelas, () => [])
+          .add(siswa);
     }
-    if (groupedByProdiKelas.isEmpty) {
+
+    print('🎯 Grouped students data: $groupedByTahunAjaranProdiKelas');
+
+    if (groupedByTahunAjaranProdiKelas.isEmpty) {
+      print('❌ No students data to display');
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(Icons.search_off, size: 64, color: Colors.grey),
+            Icon(Icons.people_outline, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text(
-              "Tidak ada data siswa yang sesuai dengan pencarian",
-              style: TextStyle(color: Colors.grey),
+              "Belum ada data siswa",
+              style: TextStyle(color: Colors.grey, fontSize: 18),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Data siswa akan muncul setelah diimpor oleh admin",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
-    List<String> sortedProdiKeys = groupedByProdiKelas.keys.toList()..sort();
+
+    List<String> sortedTahunAjaranKeys =
+        groupedByTahunAjaranProdiKelas.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+
     return ListView(
       padding: const EdgeInsets.all(8),
       children:
-          sortedProdiKeys.map((prodi) {
-            final kelasMap = groupedByProdiKelas[prodi]!;
-            final isExpandedProdi = expandedProdiSiswa.contains(prodi);
+          sortedTahunAjaranKeys.map((tahunAjaran) {
+            final prodiKelasMap = groupedByTahunAjaranProdiKelas[tahunAjaran]!;
+            final isExpandedTahunAjaran = expandedTahunAjaranSiswa.contains(
+              tahunAjaran,
+            );
+
             return Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              elevation: 4,
-              margin: const EdgeInsets.symmetric(vertical: 6),
+              elevation: 5,
+              margin: const EdgeInsets.symmetric(vertical: 8),
               child: Column(
                 children: [
                   InkWell(
                     onTap: () {
                       setState(() {
-                        if (isExpandedProdi) {
-                          expandedProdiSiswa.remove(prodi);
+                        if (isExpandedTahunAjaran) {
+                          expandedTahunAjaranSiswa.remove(tahunAjaran);
                         } else {
-                          expandedProdiSiswa.add(prodi);
+                          expandedTahunAjaranSiswa.add(tahunAjaran);
                         }
                       });
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: ListTile(
-                      leading: const Icon(Icons.school, color: Colors.cyan),
+                      leading: const Icon(Icons.calendar_today),
                       title: Text(
-                        '$prodi',
+                        'Tahun Ajaran: $tahunAjaran',
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      subtitle: Text(
+                        '${_countTotalStudents(prodiKelasMap)} siswa',
+                      ),
                       trailing: Icon(
-                        isExpandedProdi ? Icons.expand_less : Icons.expand_more,
+                        isExpandedTahunAjaran
+                            ? Icons.expand_less
+                            : Icons.expand_more,
                       ),
                     ),
                   ),
-                  if (isExpandedProdi)
+                  if (isExpandedTahunAjaran)
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 5,
+                        horizontal: 8,
+                        vertical: 8,
                       ),
                       child: Column(
-                        children:
-                            (kelasMap.entries.toList()..sort((a, b) => a.key.compareTo(b.key))).map((
-                              kelasEntry,
-                            ) {
-                              final kelas = kelasEntry.key;
-                              final siswaList = kelasEntry.value;
-                              final kelasKey = '$prodi:$kelas';
-                              final isExpandedKelas = expandedKelasSiswa
-                                  .contains(kelasKey);
-                              return Card(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 3,
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                child: Column(
-                                  children: [
-                                    InkWell(
-                                      onTap: () {
-                                        setState(() {
-                                          if (isExpandedKelas) {
-                                            expandedKelasSiswa.remove(kelasKey);
-                                          } else {
-                                            expandedKelasSiswa.add(kelasKey);
-                                          }
-                                        });
-                                      },
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: ListTile(
-                                        leading: const Icon(
-                                          Icons.class_,
-                                          color: Colors.teal,
-                                        ),
-                                        title: Text(
-                                          'Kelas: $kelas',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        trailing: Icon(
-                                          isExpandedKelas
-                                              ? Icons.expand_less
-                                              : Icons.expand_more,
-                                        ),
-                                      ),
-                                    ),
-                                    if (isExpandedKelas)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 5,
-                                          vertical: 5,
-                                        ),
-                                        child: Column(
-                                          children:
-                                              (siswaList..sort((a, b) {
-                                                    final noAbsenA =
-                                                        int.tryParse(
-                                                          a['no_absen']
-                                                                  ?.toString() ??
-                                                              '0',
-                                                        ) ??
-                                                        0;
-                                                    final noAbsenB =
-                                                        int.tryParse(
-                                                          b['no_absen']
-                                                                  ?.toString() ??
-                                                              '0',
-                                                        ) ??
-                                                        0;
-                                                    return noAbsenA.compareTo(
-                                                      noAbsenB,
-                                                    );
-                                                  }))
-                                                  .map((siswa) {
-                                                    final photoUrl =
-                                                        siswa['foto'] ??
-                                                        'http://10.167.91.233/aplikasi-checkin/uploads/siswa/default.png';
-                                                    return Card(
-                                                      elevation: 1,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              10,
-                                                            ),
-                                                      ),
-                                                      margin:
-                                                          const EdgeInsets.symmetric(
-                                                            vertical: 4,
-                                                          ),
-                                                      child: InkWell(
-                                                        onTap: () {
-                                                          showDialog(
-                                                            context: context,
-                                                            builder:
-                                                                (_) => Dialog(
-                                                                  shape: RoundedRectangleBorder(
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          16,
-                                                                        ),
-                                                                  ),
-                                                                  child: SingleChildScrollView(
-                                                                    child: Padding(
-                                                                      padding:
-                                                                          const EdgeInsets.all(
-                                                                            16.0,
-                                                                          ),
-                                                                      child: Column(
-                                                                        mainAxisSize:
-                                                                            MainAxisSize.min,
-                                                                        children: [
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                16,
-                                                                          ),
-                                                                          Stack(
-                                                                            alignment:
-                                                                                Alignment.bottomRight,
-                                                                            children: [
-                                                                              Hero(
-                                                                                tag:
-                                                                                    'siswa-${siswa['id']}',
-                                                                                child: CircleAvatar(
-                                                                                  backgroundImage: NetworkImage(
-                                                                                    photoUrl,
-                                                                                  ),
-                                                                                  radius:
-                                                                                      60,
-                                                                                  onBackgroundImageError:
-                                                                                      (
-                                                                                        _,
-                                                                                        __,
-                                                                                      ) {},
-                                                                                ),
-                                                                              ),
-                                                                            ],
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                16,
-                                                                          ),
-                                                                          Text(
-                                                                            siswa['nama_lengkap'] ??
-                                                                                'Tidak Ada Nama',
-                                                                            style: const TextStyle(
-                                                                              fontSize:
-                                                                                  20,
-                                                                              fontWeight:
-                                                                                  FontWeight.bold,
-                                                                            ),
-                                                                            textAlign:
-                                                                                TextAlign.center,
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                20,
-                                                                          ),
-                                                                          _buildDetailItem(
-                                                                            icon:
-                                                                                Icons.email,
-                                                                            title:
-                                                                                'Email',
-                                                                            value:
-                                                                                siswa['email'] ??
-                                                                                '-',
-                                                                            color:
-                                                                                Colors.orange,
-                                                                          ),
-                                                                          const Divider(),
-                                                                          _buildDetailItem(
-                                                                            icon:
-                                                                                Icons.format_list_numbered,
-                                                                            title:
-                                                                                'No Absen',
-                                                                            value:
-                                                                                siswa['no_absen']?.toString() ??
-                                                                                '-',
-                                                                            color:
-                                                                                Colors.amber,
-                                                                          ),
-                                                                          const Divider(),
-                                                                          _buildDetailItem(
-                                                                            icon:
-                                                                                Icons.class_,
-                                                                            title:
-                                                                                'Kelas',
-                                                                            value:
-                                                                                kelas,
-                                                                            color:
-                                                                                Colors.teal,
-                                                                          ),
-                                                                          const Divider(),
-                                                                          _buildDetailItem(
-                                                                            icon:
-                                                                                Icons.school,
-                                                                            title:
-                                                                                'Prodi',
-                                                                            value:
-                                                                                prodi,
-                                                                            color:
-                                                                                Colors.indigo,
-                                                                          ),
-                                                                          const Divider(),
-                                                                          _buildDetailItem(
-                                                                            icon:
-                                                                                siswa['jenis_kelamin'] ==
-                                                                                        'L'
-                                                                                    ? Icons.male
-                                                                                    : Icons.female,
-                                                                            title:
-                                                                                'Jenis Kelamin',
-                                                                            value:
-                                                                                siswa['jenis_kelamin'] ==
-                                                                                        'L'
-                                                                                    ? 'Laki-laki'
-                                                                                    : 'Perempuan',
-                                                                            color:
-                                                                                siswa['jenis_kelamin'] ==
-                                                                                        'L'
-                                                                                    ? Colors.blue
-                                                                                    : Colors.pink,
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                16,
-                                                                          ),
-                                                                          const SizedBox(
-                                                                            height:
-                                                                                12,
-                                                                          ),
-                                                                          SizedBox(
-                                                                            width:
-                                                                                double.infinity,
-                                                                            child: ElevatedButton.icon(
-                                                                              icon: const Icon(
-                                                                                Icons.edit,
-                                                                                color:
-                                                                                    Colors.white,
-                                                                              ),
-                                                                              label: const Text(
-                                                                                'Edit Data Siswa',
-                                                                                style: TextStyle(
-                                                                                  color:
-                                                                                      Colors.white,
-                                                                                ),
-                                                                              ),
-                                                                              style: ElevatedButton.styleFrom(
-                                                                                backgroundColor:
-                                                                                    Colors.orange,
-                                                                                shape: RoundedRectangleBorder(
-                                                                                  borderRadius: BorderRadius.circular(
-                                                                                    8,
-                                                                                  ),
-                                                                                ),
-                                                                              ),
-                                                                              onPressed: () {
-                                                                                Navigator.pop(
-                                                                                  context,
-                                                                                );
-                                                                                _showEditSiswaDialog(
-                                                                                  siswa,
-                                                                                );
-                                                                              },
-                                                                            ),
-                                                                          ),
-                                                                          SizedBox(
-                                                                            width:
-                                                                                double.infinity,
-                                                                            child: ElevatedButton(
-                                                                              onPressed:
-                                                                                  () => Navigator.pop(
-                                                                                    context,
-                                                                                  ),
-                                                                              style: ElevatedButton.styleFrom(
-                                                                                backgroundColor:
-                                                                                    Colors.blueAccent,
-                                                                                shape: RoundedRectangleBorder(
-                                                                                  borderRadius: BorderRadius.circular(
-                                                                                    8,
-                                                                                  ),
-                                                                                ),
-                                                                              ),
-                                                                              child: const Text(
-                                                                                'Tutup',
-                                                                                style: TextStyle(
-                                                                                  color:
-                                                                                      Colors.white,
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                          );
-                                                        },
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              10,
-                                                            ),
-                                                        child: Padding(
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                12,
-                                                              ),
-                                                          child: Row(
-                                                            children: [
-                                                              Row(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Container(
-                                                                    width: 15,
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .center,
-                                                                    child: Text(
-                                                                      '${siswa['no_absen'] ?? '-'}',
-                                                                      style: const TextStyle(
-                                                                        fontWeight:
-                                                                            FontWeight.bold,
-                                                                        fontSize:
-                                                                            20,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  const SizedBox(
-                                                                    width: 8,
-                                                                  ),
-                                                                  CircleAvatar(
-                                                                    backgroundImage:
-                                                                        NetworkImage(
-                                                                          photoUrl,
-                                                                        ),
-                                                                    radius: 25,
-                                                                    onBackgroundImageError:
-                                                                        (
-                                                                          _,
-                                                                          __,
-                                                                        ) {},
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              const SizedBox(
-                                                                width: 12,
-                                                              ),
-                                                              Expanded(
-                                                                child: Column(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment
-                                                                          .start,
-                                                                  children: [
-                                                                    Row(
-                                                                      children: [
-                                                                        Flexible(
-                                                                          child: Text(
-                                                                            siswa['nama_lengkap'] ??
-                                                                                'Tidak Ada Nama',
-                                                                            style: const TextStyle(
-                                                                              fontWeight:
-                                                                                  FontWeight.bold,
-                                                                              fontSize:
-                                                                                  16,
-                                                                            ),
-                                                                            overflow:
-                                                                                TextOverflow.ellipsis,
-                                                                          ),
-                                                                        ),
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              6,
-                                                                        ),
-                                                                        Icon(
-                                                                          siswa['jenis_kelamin'] ==
-                                                                                  'L'
-                                                                              ? Icons.male
-                                                                              : Icons.female,
-                                                                          color:
-                                                                              siswa['jenis_kelamin'] ==
-                                                                                      'L'
-                                                                                  ? Colors.blue
-                                                                                  : Colors.pink,
-                                                                          size:
-                                                                              16,
-                                                                        ),
-                                                                      ],
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      height: 4,
-                                                                    ),
-                                                                    Text(
-                                                                      siswa['email'] ??
-                                                                          'Tidak Ada Email',
-                                                                      style: const TextStyle(
-                                                                        fontSize:
-                                                                            14,
-                                                                        color:
-                                                                            Colors.grey,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              const Icon(
-                                                                Icons
-                                                                    .arrow_forward_ios,
-                                                                size: 16,
-                                                                color:
-                                                                    Colors.grey,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  })
-                                                  .toList(),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
+                        children: _buildProdiCardsAdmin(
+                          prodiKelasMap,
+                          tahunAjaran,
+                        ),
                       ),
                     ),
                 ],
@@ -974,15 +712,332 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
     );
   }
 
+  int _countTotalStudents(
+    Map<String, Map<String, List<Map<String, dynamic>>>> prodiKelasMap,
+  ) {
+    int total = 0;
+    for (var kelasMap in prodiKelasMap.values) {
+      for (var siswaList in kelasMap.values) {
+        total += siswaList.length;
+      }
+    }
+    return total;
+  }
+
+  List<Widget> _buildProdiCardsAdmin(
+    Map<String, Map<String, List<Map<String, dynamic>>>> prodiKelasMap,
+    String tahunAjaran,
+  ) {
+    List<String> sortedProdiKeys = prodiKelasMap.keys.toList()..sort();
+
+    return sortedProdiKeys.map((prodi) {
+      final kelasMap = prodiKelasMap[prodi]!;
+      final prodiKey = '${tahunAjaran}_$prodi';
+      final isExpandedProdi = expandedProdiSiswa.contains(prodiKey);
+
+      return Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 4,
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                setState(() {
+                  if (isExpandedProdi) {
+                    expandedProdiSiswa.remove(prodiKey);
+                  } else {
+                    expandedProdiSiswa.add(prodiKey);
+                  }
+                });
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: ListTile(
+                leading: const Icon(Icons.school),
+                title: Text(
+                  '$prodi',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                trailing: Icon(
+                  isExpandedProdi ? Icons.expand_less : Icons.expand_more,
+                ),
+              ),
+            ),
+            if (isExpandedProdi)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                child: Column(
+                  children: _buildKelasCardsAdmin(kelasMap, tahunAjaran, prodi),
+                ),
+              ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+  List<Widget> _buildKelasCardsAdmin(
+    Map<String, List<Map<String, dynamic>>> kelasMap,
+    String tahunAjaran,
+    String prodi,
+  ) {
+    return (kelasMap.entries.toList()..sort((a, b) => a.key.compareTo(b.key))).map((
+      kelasEntry,
+    ) {
+      final kelas = kelasEntry.key;
+      final siswaList = kelasEntry.value;
+      final kelasKey = '${tahunAjaran}_${prodi}_$kelas';
+      final isExpandedKelas = expandedKelasSiswa.contains(kelasKey);
+
+      return Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 3,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () {
+                setState(() {
+                  if (isExpandedKelas) {
+                    expandedKelasSiswa.remove(kelasKey);
+                  } else {
+                    expandedKelasSiswa.add(kelasKey);
+                  }
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: ListTile(
+                leading: const Icon(Icons.class_),
+                title: Text(
+                  'Kelas: $kelas',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                trailing: Icon(
+                  isExpandedKelas ? Icons.expand_less : Icons.expand_more,
+                ),
+              ),
+            ),
+            if (isExpandedKelas)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                child: Column(
+                  children:
+                      (siswaList..sort((a, b) {
+                            final noAbsenA =
+                                int.tryParse(
+                                  a['no_absen']?.toString() ?? '0',
+                                ) ??
+                                0;
+                            final noAbsenB =
+                                int.tryParse(
+                                  b['no_absen']?.toString() ?? '0',
+                                ) ??
+                                0;
+                            return noAbsenA.compareTo(noAbsenB);
+                          }))
+                          .map((siswa) {
+                            final photoUrl =
+                                siswa['foto'] ??
+                                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/default.png';
+                            return Card(
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: InkWell(
+                                onTap: () {
+                                  showDialog(
+                                    context: context,
+                                    builder:
+                                        (_) => Dialog(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          ),
+                                          child: SingleChildScrollView(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(
+                                                16.0,
+                                              ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const SizedBox(height: 16),
+                                                  Stack(
+                                                    alignment:
+                                                        Alignment.bottomRight,
+                                                    children: [
+                                                      Hero(
+                                                        tag:
+                                                            'siswa-${siswa['id']}',
+                                                        child: CircleAvatar(
+                                                          backgroundImage:
+                                                              NetworkImage(
+                                                                photoUrl,
+                                                              ),
+                                                          radius: 60,
+                                                          onBackgroundImageError:
+                                                              (_, __) {},
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 16),
+                                                  Text(
+                                                    siswa['nama_lengkap'] ??
+                                                        'Tidak Ada Nama',
+                                                    style: const TextStyle(
+                                                      fontSize: 20,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                  const SizedBox(height: 20),
+                                                  _buildDetailItem(
+                                                    icon: Icons.email,
+                                                    title: 'Email',
+                                                    value:
+                                                        siswa['email'] ?? '-',
+                                                  ),
+                                                  const Divider(),
+                                                  _buildDetailItem(
+                                                    icon:
+                                                        Icons
+                                                            .format_list_numbered,
+                                                    title: 'No Absen',
+                                                    value:
+                                                        siswa['no_absen']
+                                                            ?.toString() ??
+                                                        '-',
+                                                  ),
+                                                  const Divider(),
+                                                  _buildDetailItem(
+                                                    icon: Icons.class_,
+                                                    title: 'Kelas',
+                                                    value: kelas,
+                                                  ),
+                                                  const Divider(),
+                                                  _buildDetailItem(
+                                                    icon: Icons.school,
+                                                    title: 'Prodi',
+                                                    value: prodi,
+                                                  ),
+                                                  const Divider(),
+                                                  _buildDetailItem(
+                                                    icon: Icons.calendar_today,
+                                                    title: 'Tahun Ajaran',
+                                                    value: tahunAjaran,
+                                                  ),
+                                                  const Divider(),
+                                                  _buildDetailItem(
+                                                    icon:
+                                                        siswa['jenis_kelamin'] ==
+                                                                'L'
+                                                            ? Icons.male
+                                                            : Icons.female,
+                                                    title: 'Jenis Kelamin',
+                                                    value:
+                                                        siswa['jenis_kelamin'] ==
+                                                                'L'
+                                                            ? 'Laki-laki'
+                                                            : 'Perempuan',
+                                                  ),
+                                                  const SizedBox(height: 16),
+                                                  const SizedBox(height: 12),
+                                                  SizedBox(
+                                                    width: double.infinity,
+                                                    child: ElevatedButton.icon(
+                                                      icon: const Icon(
+                                                        Icons.edit,
+                                                        color: Colors.white,
+                                                      ),
+                                                      label: const Text(
+                                                        'Edit Data Siswa',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor:
+                                                            Colors.orange,
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                      onPressed: () {
+                                                        Navigator.pop(context);
+                                                        _showStudentEditDialog(
+                                                          siswa,
+                                                        );
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(10),
+                                child: ListTile(
+                                  leading: Hero(
+                                    tag: 'siswa-${siswa['id']}',
+                                    child: CircleAvatar(
+                                      backgroundImage: NetworkImage(photoUrl),
+                                      radius: 25,
+                                      onBackgroundImageError: (_, __) {},
+                                    ),
+                                  ),
+                                  title: Text(
+                                    siswa['nama_lengkap'] ?? 'Tidak Ada Nama',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    'No. Absen: ${siswa['no_absen'] ?? '-'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  trailing: Icon(
+                                    siswa['jenis_kelamin'] == 'L'
+                                        ? Icons.male
+                                        : Icons.female,
+                                    color:
+                                        siswa['jenis_kelamin'] == 'L'
+                                            ? Colors.blue
+                                            : Colors.pink,
+                                  ),
+                                ),
+                              ),
+                            );
+                          })
+                          .toList(),
+                ),
+              ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
   Widget _buildDetailItem({
     required IconData icon,
     required String title,
     required String value,
-    required Color color,
   }) {
     return Row(
       children: [
-        Icon(icon, color: color, size: 20),
+        Icon(icon, size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1000,7 +1055,7 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
                 value,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1010,523 +1065,336 @@ class _AdminDataViewPageState extends State<AdminDataViewPage>
     );
   }
 
-  void _showEditGuruDialog(Map<String, dynamic> guru) {
-    final namaController = TextEditingController(
-      text: guru['nama_lengkap'] ?? '',
-    );
-    final emailController = TextEditingController(text: guru['email'] ?? '');
-    final prodiController = TextEditingController(text: guru['prodi'] ?? '');
-    final gender = guru['jenis_kelamin'] ?? 'L';
-    final fotoController = TextEditingController(
-      text: _extractFileName(guru['foto'] ?? ''),
-    );
-    final originalEmail = guru['email'] ?? '';
+  void _showTeacherEditDialog(Map<String, dynamic> teacher) {
+    final nameController = TextEditingController(text: teacher['nama_lengkap']);
+    final emailController = TextEditingController(text: teacher['email']);
+    final prodiController = TextEditingController(text: teacher['prodi']);
+    String selectedGender = teacher['jenis_kelamin'] ?? 'L';
 
     showDialog(
       context: context,
-      builder: (context) {
-        String selectedGender = gender;
-        return AlertDialog(
-          title: const Text('Edit Data Guru'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Warning message about email changes
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber[200]!),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber, color: Colors.amber, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Perubahan email akan memperbarui semua data terkait (mata pelajaran, presensi, kelas) secara otomatis.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.amber,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                TextField(
-                  controller: namaController,
-                  decoration: const InputDecoration(labelText: 'Nama Lengkap'),
-                ),
-                TextField(
-                  controller: emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: originalEmail,
-                    helperText: 'Email saat ini: $originalEmail',
-                  ),
-                ),
-                TextField(
-                  controller: prodiController,
-                  decoration: const InputDecoration(labelText: 'Prodi'),
-                ),
-                DropdownButtonFormField<String>(
-                  value: selectedGender,
-                  items: const [
-                    DropdownMenuItem(value: 'L', child: Text('Laki-laki')),
-                    DropdownMenuItem(value: 'P', child: Text('Perempuan')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) selectedGender = val;
-                  },
-                  decoration: const InputDecoration(labelText: 'Jenis Kelamin'),
-                ),
-                TextField(
-                  controller: fotoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama File Foto',
-                    hintText: 'contoh: foto_guru.jpg',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // Validasi input
-                if (namaController.text.trim().isEmpty) {
-                  showToast('Nama lengkap tidak boleh kosong');
-                  return;
-                }
-                if (emailController.text.trim().isEmpty) {
-                  showToast('Email tidak boleh kosong');
-                  return;
-                }
-                if (!RegExp(
-                  r'^[^@]+@[^@]+\.[^@]+',
-                ).hasMatch(emailController.text.trim())) {
-                  showToast('Format email tidak valid');
-                  return;
-                }
-                if (prodiController.text.trim().isEmpty) {
-                  showToast('Prodi tidak boleh kosong');
-                  return;
-                }
-
-                await _editDataGuru(
-                  id: guru['id'].toString(),
-                  nama: namaController.text.trim(),
-                  email: emailController.text.trim(),
-                  prodi: prodiController.text.trim(),
-                  gender: selectedGender,
-                  foto: fotoController.text.trim(),
-                );
-                Navigator.pop(context);
-                await fetchTeachers();
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _editDataGuru({
-    required String id,
-    required String nama,
-    required String email,
-    required String prodi,
-    required String gender,
-    required String foto,
-  }) async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
       builder:
-          (context) => const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('Menyimpan perubahan...'),
-              ],
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-          ),
-    );
-
-    try {
-      final response = await http
-          .post(
-            Uri.parse(
-              'http://10.167.91.233/aplikasi-checkin/pages/admin/edit_data.php',
-            ),
-            body: {
-              'type': 'guru',
-              'id': id,
-              'nama_lengkap': nama,
-              'email': email,
-              'prodi': prodi,
-              'jenis_kelamin': gender,
-              'foto': foto,
-            },
-          )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw Exception(
-                'Timeout: Proses edit memakan waktu terlalu lama',
-              );
-            },
-          );
-
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          showToast(
-            'Data guru berhasil diperbarui. Semua data terkait email lama telah diupdate.',
-          );
-        } else {
-          _showErrorDialog(
-            'Gagal mengedit data guru',
-            data['message'] ?? 'Terjadi kesalahan tidak diketahui',
-          );
-        }
-      } else {
-        _showErrorDialog(
-          'Kesalahan Server',
-          'HTTP Error ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      // Close loading dialog if still open
-      if (mounted) Navigator.of(context).pop();
-
-      String errorMessage = 'Terjadi kesalahan saat mengedit data guru';
-      if (e.toString().contains('Timeout')) {
-        errorMessage =
-            'Proses edit memakan waktu terlalu lama. Silakan coba lagi.';
-      } else if (e.toString().contains('SocketException')) {
-        errorMessage =
-            'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
-      }
-
-      _showErrorDialog('Error', errorMessage);
-    }
-  }
-
-  void _showEditSiswaDialog(Map<String, dynamic> siswa) {
-    final namaController = TextEditingController(
-      text: siswa['nama_lengkap'] ?? '',
-    );
-    final emailController = TextEditingController(text: siswa['email'] ?? '');
-    final prodiController = TextEditingController(text: siswa['prodi'] ?? '');
-    final kelasController = TextEditingController(text: siswa['kelas'] ?? '');
-    final noAbsenController = TextEditingController(
-      text: siswa['no_absen']?.toString() ?? '',
-    );
-    final gender = siswa['jenis_kelamin'] ?? 'L';
-    final fotoController = TextEditingController(
-      text: _extractFileName(siswa['foto'] ?? ''),
-    );
-    final originalEmail = siswa['email'] ?? '';
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        String selectedGender = gender;
-        return AlertDialog(
-          title: const Text('Edit Data Siswa'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Warning message about data updates
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue[200]!),
+            title: const Text('Edit Data Guru'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    keyboardType: TextInputType.name,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Lengkap',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Perubahan data akan memperbarui semua record presensi siswa yang terkait.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    textCapitalization: TextCapitalization.none,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: prodiController,
+                    textCapitalization: TextCapitalization.characters,
+                    keyboardType: TextInputType.text,
+                    decoration: const InputDecoration(
+                      labelText: 'Prodi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedGender,
+                    decoration: const InputDecoration(
+                      labelText: 'Jenis Kelamin',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'L', child: Text('Laki-laki')),
+                      DropdownMenuItem(value: 'P', child: Text('Perempuan')),
                     ],
+                    onChanged: (value) {
+                      selectedGender = value!;
+                    },
                   ),
-                ),
-                TextField(
-                  controller: namaController,
-                  decoration: const InputDecoration(labelText: 'Nama Lengkap'),
-                ),
-                TextField(
-                  controller: emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: originalEmail,
-                    helperText: 'Email saat ini: $originalEmail',
-                  ),
-                ),
-                TextField(
-                  controller: prodiController,
-                  decoration: const InputDecoration(labelText: 'Prodi'),
-                ),
-                TextField(
-                  controller: kelasController,
-                  decoration: const InputDecoration(labelText: 'Kelas'),
-                ),
-                TextField(
-                  controller: noAbsenController,
-                  decoration: const InputDecoration(labelText: 'No Absen'),
-                  keyboardType: TextInputType.number,
-                ),
-                DropdownButtonFormField<String>(
-                  value: selectedGender,
-                  items: const [
-                    DropdownMenuItem(value: 'L', child: Text('Laki-laki')),
-                    DropdownMenuItem(value: 'P', child: Text('Perempuan')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) selectedGender = val;
-                  },
-                  decoration: const InputDecoration(labelText: 'Jenis Kelamin'),
-                ),
-                TextField(
-                  controller: fotoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama File Foto',
-                    hintText: 'contoh: foto_siswa.jpg',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // Validasi input
-                if (namaController.text.trim().isEmpty) {
-                  showToast('Nama lengkap tidak boleh kosong');
-                  return;
-                }
-                if (emailController.text.trim().isEmpty) {
-                  showToast('Email tidak boleh kosong');
-                  return;
-                }
-                if (!RegExp(
-                  r'^[^@]+@[^@]+\.[^@]+',
-                ).hasMatch(emailController.text.trim())) {
-                  showToast('Format email tidak valid');
-                  return;
-                }
-                if (prodiController.text.trim().isEmpty) {
-                  showToast('Prodi tidak boleh kosong');
-                  return;
-                }
-                if (kelasController.text.trim().isEmpty) {
-                  showToast('Kelas tidak boleh kosong');
-                  return;
-                }
-                if (noAbsenController.text.trim().isEmpty) {
-                  showToast('No absen tidak boleh kosong');
-                  return;
-                }
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              LoadingButton(
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) {
+                    showError('Nama lengkap tidak boleh kosong');
+                    return;
+                  }
+                  if (emailController.text.trim().isEmpty) {
+                    showError('Email tidak boleh kosong');
+                    return;
+                  }
+                  if (!RegExp(
+                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                  ).hasMatch(emailController.text.trim())) {
+                    showError('Format email tidak valid');
+                    return;
+                  }
+                  if (prodiController.text.trim().isEmpty) {
+                    showError('Prodi tidak boleh kosong');
+                    return;
+                  }
 
-                // Validasi no absen harus berupa angka
-                final noAbsen = int.tryParse(noAbsenController.text.trim());
-                if (noAbsen == null || noAbsen <= 0) {
-                  showToast('No absen harus berupa angka positif');
-                  return;
-                }
+                  await executeWithLoading('Memperbarui data guru...', () async {
+                    // Hanya kirim field yang berubah
+                    Map<String, String> updateData = {
+                      'type': 'guru',
+                      'id': teacher['id'].toString(),
+                    };
 
-                await _editDataSiswa(
-                  id: siswa['id'].toString(),
-                  nama: namaController.text.trim(),
-                  email: emailController.text.trim(),
-                  prodi: prodiController.text.trim(),
-                  kelas: kelasController.text.trim(),
-                  noAbsen: noAbsenController.text.trim(),
-                  gender: selectedGender,
-                  foto: fotoController.text.trim(),
-                );
-                Navigator.pop(context);
-                await fetchStudents();
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+                    // Cek field yang berubah dan hanya kirim yang berubah
+                    if (nameController.text.trim() != teacher['nama_lengkap']) {
+                      updateData['nama_lengkap'] = nameController.text.trim();
+                    }
+                    if (emailController.text.trim() != teacher['email']) {
+                      updateData['email'] = emailController.text.trim();
+                    }
+                    if (prodiController.text.trim() != teacher['prodi']) {
+                      updateData['prodi'] = prodiController.text.trim();
+                    }
+                    if (selectedGender != teacher['jenis_kelamin']) {
+                      updateData['jenis_kelamin'] = selectedGender;
+                    }
 
-  Future<void> _editDataSiswa({
-    required String id,
-    required String nama,
-    required String email,
-    required String prodi,
-    required String kelas,
-    required String noAbsen,
-    required String gender,
-    required String foto,
-  }) async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (context) => const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('Menyimpan perubahan...'),
-              ],
-            ),
-          ),
-    );
+                    final response = await http.post(
+                      Uri.parse(
+                        'http://192.168.1.17/aplikasi-checkin/pages/admin/edit_data.php',
+                      ),
+                      body: updateData,
+                    );
 
-    try {
-      final response = await http
-          .post(
-            Uri.parse(
-              'http://10.167.91.233/aplikasi-checkin/pages/admin/edit_data.php',
-            ),
-            body: {
-              'type': 'siswa',
-              'id': id,
-              'nama_lengkap': nama,
-              'email': email,
-              'prodi': prodi,
-              'kelas': kelas,
-              'no_absen': noAbsen,
-              'jenis_kelamin': gender,
-              'foto': foto,
-            },
-          )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw Exception(
-                'Timeout: Proses edit memakan waktu terlalu lama',
-              );
-            },
-          );
-
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          showToast(
-            'Data siswa berhasil diperbarui. Semua data presensi terkait telah diupdate.',
-          );
-        } else {
-          _showErrorDialog(
-            'Gagal mengedit data siswa',
-            data['message'] ?? 'Terjadi kesalahan tidak diketahui',
-          );
-        }
-      } else {
-        _showErrorDialog(
-          'Kesalahan Server',
-          'HTTP Error ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      // Close loading dialog if still open
-      if (mounted) Navigator.of(context).pop();
-
-      String errorMessage = 'Terjadi kesalahan saat mengedit data siswa';
-      if (e.toString().contains('Timeout')) {
-        errorMessage =
-            'Proses edit memakan waktu terlalu lama. Silakan coba lagi.';
-      } else if (e.toString().contains('SocketException')) {
-        errorMessage =
-            'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
-      }
-
-      _showErrorDialog('Error', errorMessage);
-    }
-  }
-
-  void _showErrorDialog(String title, String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 28),
-              const SizedBox(width: 8),
-              Expanded(child: Text(title)),
+                    if (response.statusCode == 200) {
+                      try {
+                        final data = json.decode(response.body);
+                        if (data['status'] == 'success') {
+                          showSuccess('Data guru berhasil diupdate');
+                          await fetchTeachers();
+                          if (mounted) Navigator.of(context).pop();
+                        } else {
+                          showError(
+                            data['message'] ?? 'Gagal mengupdate data guru',
+                          );
+                        }
+                      } catch (e) {
+                        // Server mengembalikan HTML atau response yang tidak valid
+                        print('Edit Teacher Response body: ${response.body}');
+                        showError(
+                          'Server mengembalikan response yang tidak valid. Periksa koneksi atau hubungi administrator.',
+                        );
+                      }
+                    } else {
+                      showError(
+                        'Terjadi kesalahan pada server: ${response.statusCode}',
+                      );
+                    }
+                  });
+                },
+                child: const Text('Simpan'),
+              ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message, style: const TextStyle(fontSize: 14)),
-                const SizedBox(height: 16),
-                const Text(
-                  'Jika masalah berlanjut, silakan hubungi administrator.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('OK', style: TextStyle(fontSize: 16)),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        );
-      },
     );
   }
 
-  String _extractFileName(String fotoPath) {
-    if (fotoPath.isEmpty) return '';
-    if (fotoPath.contains('/')) {
-      return fotoPath.split('/').last;
-    }
-    return fotoPath;
+  void _showStudentEditDialog(Map<String, dynamic> student) {
+    final nameController = TextEditingController(text: student['nama_lengkap']);
+    final emailController = TextEditingController(text: student['email']);
+    final prodiController = TextEditingController(text: student['prodi']);
+    final kelasController = TextEditingController(text: student['kelas']);
+    final noAbsenController = TextEditingController(
+      text: student['no_absen']?.toString(),
+    );
+    String selectedGender = student['jenis_kelamin'] ?? 'L';
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Edit Data Siswa'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    keyboardType: TextInputType.name,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Lengkap',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    textCapitalization: TextCapitalization.none,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: prodiController,
+                    textCapitalization: TextCapitalization.characters,
+                    keyboardType: TextInputType.text,
+                    decoration: const InputDecoration(
+                      labelText: 'Prodi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: kelasController,
+                    textCapitalization: TextCapitalization.characters,
+                    keyboardType: TextInputType.text,
+                    decoration: const InputDecoration(
+                      labelText: 'Kelas',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: noAbsenController,
+                    decoration: const InputDecoration(
+                      labelText: 'No Absen',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedGender,
+                    decoration: const InputDecoration(
+                      labelText: 'Jenis Kelamin',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'L', child: Text('Laki-laki')),
+                      DropdownMenuItem(value: 'P', child: Text('Perempuan')),
+                    ],
+                    onChanged: (value) {
+                      selectedGender = value!;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              LoadingButton(
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) {
+                    showError('Nama lengkap tidak boleh kosong');
+                    return;
+                  }
+                  if (emailController.text.trim().isEmpty) {
+                    showError('Email tidak boleh kosong');
+                    return;
+                  }
+                  if (!RegExp(
+                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                  ).hasMatch(emailController.text.trim())) {
+                    showError('Format email tidak valid');
+                    return;
+                  }
+
+                  await executeWithLoading('Memperbarui data siswa...', () async {
+                    // Hanya kirim field yang berubah
+                    Map<String, String> updateData = {
+                      'type': 'siswa',
+                      'id': student['id'].toString(),
+                      'tahun_ajaran':
+                          student['tahun_ajaran']
+                              .toString(), // Selalu kirim tahun_ajaran untuk konsistensi
+                    };
+
+                    // Cek field yang berubah dan hanya kirim yang berubah
+                    if (nameController.text.trim() != student['nama_lengkap']) {
+                      updateData['nama_lengkap'] = nameController.text.trim();
+                    }
+                    if (emailController.text.trim() != student['email']) {
+                      updateData['email'] = emailController.text.trim();
+                    }
+                    if (prodiController.text.trim() != student['prodi']) {
+                      updateData['prodi'] = prodiController.text.trim();
+                    }
+                    if (kelasController.text.trim() != student['kelas']) {
+                      updateData['kelas'] = kelasController.text.trim();
+                    }
+                    if (noAbsenController.text.trim() !=
+                        student['no_absen']?.toString()) {
+                      updateData['no_absen'] = noAbsenController.text.trim();
+                    }
+                    if (selectedGender != student['jenis_kelamin']) {
+                      updateData['jenis_kelamin'] = selectedGender;
+                    }
+
+                    final response = await http.post(
+                      Uri.parse(
+                        'http://192.168.1.17/aplikasi-checkin/pages/admin/edit_data.php',
+                      ),
+                      body: updateData,
+                    );
+
+                    if (response.statusCode == 200) {
+                      try {
+                        final data = json.decode(response.body);
+                        if (data['status'] == 'success') {
+                          showSuccess('Data siswa berhasil diupdate');
+                          await fetchStudents();
+                          if (mounted) Navigator.of(context).pop();
+                        } else {
+                          showError(
+                            data['message'] ?? 'Gagal mengupdate data siswa',
+                          );
+                        }
+                      } catch (e) {
+                        // Server mengembalikan HTML atau response yang tidak valid
+                        print('Edit Student Response body: ${response.body}');
+                        showError(
+                          'Server mengembalikan response yang tidak valid. Periksa koneksi atau hubungi administrator.',
+                        );
+                      }
+                    } else {
+                      showError(
+                        'Terjadi kesalahan pada server: ${response.statusCode}',
+                      );
+                    }
+                  });
+                },
+                child: const Text('Simpan'),
+              ),
+            ],
+          ),
+    );
   }
 }

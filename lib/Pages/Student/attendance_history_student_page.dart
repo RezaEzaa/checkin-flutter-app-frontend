@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +17,7 @@ class _AttendanceHistoryStudentPageState
   bool isLoading = true;
   bool isRefreshing = false;
   String? siswaEmail;
+  Set<String> expandedTahunAjaran = {};
   Set<String> expandedKelas = {};
   Set<String> expandedSemester = {};
   Set<String> expandedMapel = {};
@@ -28,7 +29,6 @@ class _AttendanceHistoryStudentPageState
 
   @override
   void dispose() {
-    // Cancel any ongoing operations here if needed
     super.dispose();
   }
 
@@ -60,7 +60,7 @@ class _AttendanceHistoryStudentPageState
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_presensi_siswa.php?siswa_email=$siswaEmail',
+          'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_presensi_siswa.php?siswa_email=$siswaEmail',
         ),
       );
       if (response.statusCode == 200) {
@@ -188,7 +188,7 @@ class _AttendanceHistoryStudentPageState
                                 ),
                                 child: ListView(
                                   padding: const EdgeInsets.only(top: 8.0),
-                                  children: _buildKelasCards(),
+                                  children: _buildTahunAjaranCards(),
                                 ),
                               ),
                     ),
@@ -198,16 +198,89 @@ class _AttendanceHistoryStudentPageState
     );
   }
 
-  List<Widget> _buildKelasCards() {
-    final groupedByKelas = <String, List<Map<String, dynamic>>>{};
+  List<Widget> _buildTahunAjaranCards() {
+    final groupedByTahunAjaran = <String, List<Map<String, dynamic>>>{};
     for (final item in presensiList.cast<Map<String, dynamic>>()) {
+      final tahunAjaran = item['tahun_ajaran']?.toString() ?? 'Unknown';
+      groupedByTahunAjaran.putIfAbsent(tahunAjaran, () => []).add(item);
+    }
+
+    List<String> sortedTahunAjaranKeys =
+        groupedByTahunAjaran.keys.toList()..sort((a, b) => b.compareTo(a));
+    List<Widget> widgets = [];
+
+    for (final tahunAjaran in sortedTahunAjaranKeys) {
+      final isExpanded = expandedTahunAjaran.contains(tahunAjaran);
+      final items = groupedByTahunAjaran[tahunAjaran]!;
+
+      widgets.add(
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 4,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: () {
+                  if (!mounted) return;
+                  setState(() {
+                    if (isExpanded) {
+                      expandedTahunAjaran.remove(tahunAjaran);
+                    } else {
+                      expandedTahunAjaran.add(tahunAjaran);
+                    }
+                  });
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.calendar_today,
+                    color: Colors.indigo,
+                  ),
+                  title: Text(
+                    'Tahun Ajaran: $tahunAjaran',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  trailing: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                  ),
+                ),
+              ),
+              if (isExpanded)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  child: Column(children: _buildKelasCards(items, tahunAjaran)),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildKelasCards(
+    List<Map<String, dynamic>> tahunAjaranItems,
+    String tahunAjaran,
+  ) {
+    final groupedByKelas = <String, List<Map<String, dynamic>>>{};
+    for (final item in tahunAjaranItems.cast<Map<String, dynamic>>()) {
       final kelas = item['kelas']?.toString() ?? 'Unknown';
       groupedByKelas.putIfAbsent(kelas, () => []).add(item);
     }
     List<String> sortedKelasKeys = groupedByKelas.keys.toList()..sort();
     List<Widget> widgets = [];
     for (final kelas in sortedKelasKeys) {
-      final isExpanded = expandedKelas.contains(kelas);
+      final key = 'kelas_${tahunAjaran}_$kelas';
+      final isExpanded = expandedKelas.contains(key);
       final items = groupedByKelas[kelas]!;
       widgets.add(
         Card(
@@ -223,9 +296,9 @@ class _AttendanceHistoryStudentPageState
                   if (!mounted) return;
                   setState(() {
                     if (isExpanded) {
-                      expandedKelas.remove(kelas);
+                      expandedKelas.remove(key);
                     } else {
-                      expandedKelas.add(kelas);
+                      expandedKelas.add(key);
                     }
                   });
                 },
@@ -247,7 +320,9 @@ class _AttendanceHistoryStudentPageState
                     horizontal: 8,
                     vertical: 8,
                   ),
-                  child: Column(children: _buildSemesterCards(items, kelas)),
+                  child: Column(
+                    children: _buildSemesterCards(items, kelas, tahunAjaran),
+                  ),
                 ),
             ],
           ),
@@ -260,6 +335,7 @@ class _AttendanceHistoryStudentPageState
   List<Widget> _buildSemesterCards(
     List<Map<String, dynamic>> kelasItems,
     String kelas,
+    String tahunAjaran,
   ) {
     final groupedBySemester = <String, List<Map<String, dynamic>>>{};
     for (final item in kelasItems) {
@@ -268,7 +344,7 @@ class _AttendanceHistoryStudentPageState
     }
     List<Widget> widgets = [];
     for (final semester in groupedBySemester.keys) {
-      final key = 'semester_${kelas}_$semester';
+      final key = 'semester_${tahunAjaran}_${kelas}_$semester';
       final isExpanded = expandedSemester.contains(key);
       final items = groupedBySemester[semester]!;
       widgets.add(
@@ -313,7 +389,12 @@ class _AttendanceHistoryStudentPageState
                     vertical: 8,
                   ),
                   child: Column(
-                    children: _buildMapelCards(items, kelas, semester),
+                    children: _buildMapelCards(
+                      items,
+                      kelas,
+                      semester,
+                      tahunAjaran,
+                    ),
                   ),
                 ),
             ],
@@ -328,6 +409,7 @@ class _AttendanceHistoryStudentPageState
     List<Map<String, dynamic>> semesterItems,
     String kelas,
     String semester,
+    String tahunAjaran,
   ) {
     final groupedByMapel = <String, List<Map<String, dynamic>>>{};
     for (final item in semesterItems) {
@@ -336,7 +418,7 @@ class _AttendanceHistoryStudentPageState
     }
     List<Widget> widgets = [];
     for (final mapel in groupedByMapel.keys) {
-      final key = 'mapel_${kelas}_${semester}_$mapel';
+      final key = 'mapel_${tahunAjaran}_${kelas}_${semester}_$mapel';
       final isExpanded = expandedMapel.contains(key);
       final items = groupedByMapel[mapel]!;
       widgets.add(

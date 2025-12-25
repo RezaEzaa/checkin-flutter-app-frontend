@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:checkin/Pages/shared/school_info_page.dart';
 import 'package:checkin/Pages/shared/admin_creator_info_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class ProfileTeacherPage extends StatefulWidget {
   final String email;
@@ -16,14 +17,14 @@ class ProfileTeacherPage extends StatefulWidget {
   State<ProfileTeacherPage> createState() => _ProfileTeacherPageState();
 }
 
-class _ProfileTeacherPageState extends State<ProfileTeacherPage> {
+class _ProfileTeacherPageState extends State<ProfileTeacherPage>
+    with LoadingStateMixin {
   late String id = '';
   late String fullName = '';
   late String gender = '';
   late String email = '';
   late String prodi = '';
   late String photoUrl = '';
-  bool isLoading = true;
   bool hasSchoolData = false;
   bool hasAdminCreatorInfo = false;
   @override
@@ -35,47 +36,57 @@ class _ProfileTeacherPageState extends State<ProfileTeacherPage> {
   }
 
   Future<void> fetchProfile() async {
-    setState(() => isLoading = true);
-    final response = await http.post(
-      Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/guru/get_profile_guru.php',
-      ),
-      body: {'email': widget.email},
-    );
-    if (response.statusCode == 200) {
-      final responseData = json.decode(response.body);
-      if (responseData['status'] == 'success' && responseData['data'] != null) {
-        final data = responseData['data'];
-        setState(() {
-          id = data['id'].toString();
-          fullName = data['nama_lengkap'];
-          gender = data['jenis_kelamin'];
-          email = data['email'];
-          prodi = data['prodi'] ?? '';
-          photoUrl = data['foto'] ?? '';
-          isLoading = false;
-        });
+    await executeWithLoading('fetchProfile', () async {
+      final response = await http.post(
+        Uri.parse(
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_profile_guru.php',
+        ),
+        body: {'email': widget.email},
+      );
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        if (responseData['status'] == 'success' &&
+            responseData['data'] != null) {
+          final data = responseData['data'];
+          setState(() {
+            id = data['id'].toString();
+            fullName = data['nama_lengkap'];
+            gender = data['jenis_kelamin'];
+            email = data['email'];
+            prodi = data['prodi'] ?? '';
+            photoUrl = data['foto'] ?? '';
+          });
+        } else {
+          showError('Gagal memuat data: ${responseData['message']}');
+        }
       } else {
-        setState(() => isLoading = false);
-        print('Gagal memuat data: ${responseData['message']}');
+        showError('Request gagal dengan kode: ${response.statusCode}');
       }
-    } else {
-      setState(() => isLoading = false);
-      print('Request gagal dengan kode: ${response.statusCode}');
-    }
+    });
   }
 
   Future<void> checkSchoolData() async {
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/get_sekolah_info.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_sekolah_info.php',
         ),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        bool available = false;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('has_data')) {
+            available = data['has_data'] == true;
+          } else {
+            final status = data['status'];
+            final payload = data['data'];
+            final ok = (status == 'success' || status == true);
+            available = ok && payload != null;
+          }
+        }
         setState(() {
-          hasSchoolData = data['has_data'] ?? false;
+          hasSchoolData = available;
         });
       }
     } catch (e) {
@@ -87,7 +98,7 @@ class _ProfileTeacherPageState extends State<ProfileTeacherPage> {
     try {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/get_admin_creator.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_admin_creator.php',
         ),
         body: {'email': widget.email},
       );
@@ -158,7 +169,7 @@ class _ProfileTeacherPageState extends State<ProfileTeacherPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body:
-          isLoading
+          isLoading('fetchProfile')
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                 onRefresh: fetchProfile,

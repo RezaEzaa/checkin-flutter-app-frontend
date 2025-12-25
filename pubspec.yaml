@@ -66,8 +66,10 @@ dev_dependencies:
 
 flutter_icons:
   android: true
-  ios: true
-  image_path: "assets/icon/logo_checkin.png"  # Ganti dengan path ke ikon Anda
+  ios: false
+  image_path: "asset/icon/logo_checkin.png"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "asset/icon/logo_checkin.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

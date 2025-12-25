@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 class InformationAdminPage extends StatelessWidget {
   const InformationAdminPage({super.key});
   @override

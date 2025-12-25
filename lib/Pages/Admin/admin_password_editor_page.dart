@@ -1,9 +1,10 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/Pages/Admin/admin_forgot_password_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class PasswordAdminEditorPage extends StatefulWidget {
   final String email;
@@ -13,32 +14,40 @@ class PasswordAdminEditorPage extends StatefulWidget {
       _PasswordAdminEditorPageState();
 }
 
-class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage> {
+class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage>
+    with LoadingStateMixin {
   final TextEditingController _oldPasswordController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-  bool _isLoading = false;
   bool _isOldPasswordVisible = false;
   bool _isNewPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+
   Future<void> _savePassword() async {
     final oldPassword = _oldPasswordController.text.trim();
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
+
     if (oldPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
-      _showErrorDialog('Semua field harus diisi.');
+      showError('Semua field harus diisi.');
       return;
     }
+
     if (newPassword != confirmPassword) {
-      _showErrorDialog('Password baru dan konfirmasi tidak sama.');
+      showError('Kata Sandi baru dan konfirmasi tidak sama.');
       return;
     }
-    setState(() => _isLoading = true);
-    try {
+
+    if (newPassword.length < 6) {
+      showError('Kata Sandi baru harus minimal 6 karakter.');
+      return;
+    }
+
+    await executeWithLoading('Memperbarui password...', () async {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/update_password_admin.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/update_password_admin.php',
         ),
         body: {
           'email': widget.email,
@@ -46,52 +55,27 @@ class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage> {
           'new_password': newPassword,
         },
       );
+
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        if (result['status'] == 'success') {
-          _showSuccessToast('Password berhasil diperbarui.');
-          Navigator.pop(context);
-        } else {
-          _showErrorDialog(result['message'] ?? 'Gagal memperbarui password.');
+        try {
+          final result = json.decode(response.body);
+          if (result['status'] == 'success') {
+            showSuccess('Password berhasil diperbarui.');
+            Navigator.pop(context);
+          } else {
+            showError(result['message'] ?? 'Gagal memperbarui password.');
+          }
+        } catch (e) {
+          // Server mengembalikan HTML atau response yang tidak valid
+          print('Response body: ${response.body}');
+          showError(
+            'Server mengembalikan response yang tidak valid. Periksa koneksi atau hubungi administrator.',
+          );
         }
       } else {
-        _showErrorDialog(
-          'Terjadi kesalahan pada server: ${response.statusCode}',
-        );
+        showError('Terjadi kesalahan pada server: ${response.statusCode}');
       }
-    } catch (e) {
-      _showErrorDialog('Terjadi kesalahan: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _showSuccessToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green,
-      fontSize: 16.0,
-    );
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Terjadi Kesalahan'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-    );
+    });
   }
 
   @override
@@ -149,7 +133,7 @@ class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage> {
                 ),
                 _buildPasswordField(
                   controller: _newPasswordController,
-                  label: 'Kata Sandi Baru',
+                  label: 'Kata Sandi Baru (Min. 6 Karakter)',
                   isObscure: !_isNewPasswordVisible,
                   toggleVisibility: () {
                     setState(() {
@@ -160,7 +144,7 @@ class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage> {
                 ),
                 _buildPasswordField(
                   controller: _confirmPasswordController,
-                  label: 'Konfirmasi Kata Sandi Baru',
+                  label: 'Konfirmasi Kata Sandi Baru (Min. 6 Karakter)',
                   isObscure: !_isConfirmPasswordVisible,
                   toggleVisibility: () {
                     setState(() {
@@ -169,29 +153,48 @@ class _PasswordAdminEditorPageState extends State<PasswordAdminEditorPage> {
                   },
                   icon: Icons.lock_person_outlined,
                 ),
+                const SizedBox(height: 5),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordAdminPage(),
+                      ),
+                    );
+                  },
+                  style: ButtonStyle(
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
+                    splashFactory: NoSplash.splashFactory,
+                  ),
+                  child: const Text(
+                    'Lupa Kata Sandi?',
+                    style: TextStyle(color: Colors.blue, fontSize: 12),
+                  ),
+                ),
                 const SizedBox(height: 30),
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.save),
-                        label: const Text(
-                          'Simpan Kata Sandi',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: _savePassword,
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: LoadingButton(
+                    onPressed: _savePassword,
+                    isLoading: isLoading('Memperbarui password...'),
+                    backgroundColor: Colors.indigo,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    icon: const Icon(Icons.save, color: Colors.white),
+                    child: const Text(
+                      'Simpan Kata Sandi',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
+                  ),
+                ),
               ],
             ),
           ),

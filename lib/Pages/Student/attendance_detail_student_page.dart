@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -20,11 +20,140 @@ class _AttendanceDetailStudentPageState
   Map<String, dynamic>? detailData;
   List<Map<String, dynamic>> faceRecognitionData = [];
   bool isFaceDataLoading = false;
+
+  String _getPhotoUrl(String? foto) {
+    if (foto == null || foto.isEmpty) {
+      return 'http://192.168.1.17/aplikasi-checkin/uploads/siswa/default.png';
+    }
+
+    if (foto.startsWith('http')) {
+      print('🖼️ Student photo already has full URL: $foto');
+
+      String fixedUrl = foto.replaceAll(' ', '%20');
+
+      if (fixedUrl != foto) {
+        print('🔧 Fixed URL encoding: $fixedUrl');
+        return fixedUrl;
+      }
+
+      return foto;
+    }
+
+    final photoUrl =
+        'http://192.168.1.17/aplikasi-checkin/uploads/siswa/extract_siswa/Foto%20Siswa/${Uri.encodeComponent(foto)}';
+    print('🖼️ Constructed student photo URL: $photoUrl');
+    return photoUrl;
+  }
+
+  Widget _buildStudentAvatar(String foto) {
+    if (foto.isEmpty || foto.contains('default.png')) {
+      return CircleAvatar(
+        radius: 24,
+        backgroundColor: Colors.grey[200],
+        child: const Icon(Icons.person, size: 24, color: Colors.grey),
+      );
+    }
+
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: Colors.grey[200],
+      child: ClipOval(
+        child: Image.network(
+          foto,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            print('❌ Error loading student photo: $foto');
+            print('Error: $error');
+
+            final rawFoto = detailData?['foto'] ?? '';
+            if (rawFoto.isNotEmpty) {
+              String filename = rawFoto;
+              if (rawFoto.startsWith('http')) {
+                final uri = Uri.parse(rawFoto);
+                filename = uri.pathSegments.last;
+                print('🔍 Extracted filename from URL: $filename');
+              }
+
+              final fallbackUrls = [
+                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/${Uri.encodeComponent(filename)}',
+                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/extract_siswa/${Uri.encodeComponent(filename)}',
+                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/extract_siswa/Foto%20Siswa/${Uri.encodeComponent(filename)}',
+                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/$filename',
+              ];
+
+              print('🔄 Trying fallback URLs for filename: $filename');
+              for (var url in fallbackUrls) {
+                print('  - $url');
+              }
+
+              return Image.network(
+                fallbackUrls[0], // Try first fallback
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error2, stackTrace2) {
+                  print(
+                    '❌ First fallback failed, trying second: ${fallbackUrls[1]}',
+                  );
+                  return Image.network(
+                    fallbackUrls[1],
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error3, stackTrace3) {
+                      print(
+                        '❌ Second fallback failed, trying third: ${fallbackUrls[2]}',
+                      );
+                      return Image.network(
+                        fallbackUrls[2],
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error4, stackTrace4) {
+                          print(
+                            '❌ Third fallback failed, trying fourth: ${fallbackUrls[3]}',
+                          );
+                          return Image.network(
+                            fallbackUrls[3],
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error5, stackTrace5) {
+                              print('❌ All fallback URLs failed');
+                              return const Icon(
+                                Icons.person,
+                                size: 24,
+                                color: Colors.grey,
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            }
+
+            return const Icon(Icons.person, size: 24, color: Colors.grey);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     fetchDetailData();
-    // fetchFaceRecognitionData(); // Dihapus dari sini, akan dipanggil setelah detail data berhasil dimuat
   }
 
   Future<void> fetchDetailData() async {
@@ -36,7 +165,7 @@ class _AttendanceDetailStudentPageState
 
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_detail_presensi_siswa.php?id_presensi_siswa=$idPresensiSiswa',
+          'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_detail_presensi_siswa.php?id_presensi_siswa=$idPresensiSiswa',
         ),
       );
       if (response.statusCode == 200) {
@@ -49,9 +178,14 @@ class _AttendanceDetailStudentPageState
           print('Detail ID: ${detailData!['detail_id']}');
           print('Pertemuan: ${detailData!['pertemuan']}');
 
+          // Debug foto URL
+          final rawFoto = detailData!['foto'];
+          final processedFoto = _getPhotoUrl(rawFoto);
+          print('👤 Student foto - Raw: $rawFoto');
+          print('👤 Student foto - Processed: $processedFoto');
+
           _showSuccessToast('Data presensi berhasil dimuat.');
 
-          // Setelah detail data berhasil dimuat, ambil data face recognition
           print('📱 Starting face recognition data fetch...');
           await fetchFaceRecognitionData();
         } else {
@@ -93,7 +227,6 @@ class _AttendanceDetailStudentPageState
         return;
       }
 
-      // Step 1: Get detail data to obtain detail_id if available
       String finalId = idFromWidget;
       String idType = 'unknown';
 
@@ -106,12 +239,10 @@ class _AttendanceDetailStudentPageState
         print('⚠️ Using original ID as presensi_siswa_id: $finalId');
       }
 
-      // Step 2: Get debug info to understand the data structure
       await _fetchDebugInfo();
 
-      // Step 3: Build API URL with smart ID detection
       final apiUrl =
-          'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_data.php?id_presensi_siswa=$finalId';
+          'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_data.php?id_presensi_siswa=$finalId';
       print('API URL: $apiUrl');
       print('ID Type: $idType');
 
@@ -123,7 +254,6 @@ class _AttendanceDetailStudentPageState
         final data = json.decode(response.body);
         print('Parsed face recognition data: $data');
 
-        // Log backend detection info
         if (data['debug_info'] != null) {
           final debugInfo = data['debug_info'];
           print('🔍 Backend Detection:');
@@ -136,7 +266,6 @@ class _AttendanceDetailStudentPageState
           final List<Map<String, dynamic>> faceData =
               List<Map<String, dynamic>>.from(data['data']);
 
-          // Filter face recognition data berdasarkan pertemuan yang sesuai
           final currentPertemuan =
               detailData?['pertemuan']?.toString() ??
               widget.presensi['pertemuan']?.toString() ??
@@ -146,44 +275,104 @@ class _AttendanceDetailStudentPageState
           print('Current pertemuan: $currentPertemuan');
           print('Total records from server: ${faceData.length}');
 
+          // Get current detail data for strict filtering
+          final currentDetailId = detailData?['detail_id']?.toString() ?? '';
+          final currentTanggal = detailData?['tanggal'] ?? '';
+          final currentStatus =
+              detailData?['status']?.toString().toLowerCase() ?? '';
+
+          print('🔍 Current attendance context:');
+          print('  - Detail ID: $currentDetailId');
+          print('  - Pertemuan: $currentPertemuan');
+          print('  - Tanggal: $currentTanggal');
+          print('  - Status Kehadiran: $currentStatus');
+
           List<Map<String, dynamic>> filteredFaceData = [];
 
-          if (currentPertemuan.isNotEmpty) {
-            // Filter berdasarkan pertemuan yang sama
+          // HANYA tampilkan foto jika status HADIR
+          if (currentStatus != 'hadir') {
+            print(
+              '⚠️ Status bukan HADIR ($currentStatus), tidak menampilkan foto face recognition',
+            );
+            setState(() {
+              faceRecognitionData = [];
+            });
+            return;
+          }
+
+          if (currentPertemuan.isNotEmpty && currentTanggal.isNotEmpty) {
             for (var face in faceData) {
               final facePertemuan = face['pertemuan']?.toString() ?? '';
+              final faceTanggal = face['tanggal'] ?? '';
+              final faceDetailId = face['id_presensi_detail']?.toString() ?? '';
               final matchType = face['match_type'] ?? 'UNKNOWN_MATCH';
+              final similarity = face['similarity'] ?? 0.0;
 
               print('Checking face record:');
+              print('  - Face detail_id: $faceDetailId');
               print('  - Face pertemuan: $facePertemuan');
+              print('  - Face tanggal: $faceTanggal');
               print('  - Current pertemuan: $currentPertemuan');
+              print('  - Current tanggal: $currentTanggal');
+              print('  - Current detail_id: $currentDetailId');
               print('  - Match type: $matchType');
+              print('  - Similarity: $similarity%');
               print('  - foto_path: ${face['foto_path'] ?? ''}');
 
-              // Hanya tampilkan foto yang benar-benar dari pertemuan yang sama
-              // EXACT_MATCH = pertemuan, tanggal, dan siswa sama
-              if (matchType == 'EXACT_MATCH' &&
-                  facePertemuan == currentPertemuan) {
-                filteredFaceData.add(face);
-                print('  ✅ INCLUDED (Exact match for current meeting)');
-              } else if (matchType == 'DATE_MATCH' &&
-                  facePertemuan == currentPertemuan) {
-                filteredFaceData.add(face);
-                print('  ✅ INCLUDED (Date match for current meeting)');
-              } else {
+              // STRICT FILTERING: Harus exact match dengan detail_id, pertemuan DAN tanggal
+              bool isValidMatch = false;
+
+              // Priority 1: Exact detail_id match (paling akurat)
+              if (currentDetailId.isNotEmpty &&
+                  faceDetailId.isNotEmpty &&
+                  faceDetailId == currentDetailId &&
+                  matchType == 'EXACT_MATCH') {
+                isValidMatch = true;
+                print('  ✅ INCLUDED (Exact detail_id match)');
+              }
+              // Priority 2: Pertemuan AND tanggal match dengan similarity tinggi
+              else if (facePertemuan == currentPertemuan &&
+                  faceTanggal == currentTanggal &&
+                  (matchType == 'EXACT_MATCH' || matchType == 'DATE_MATCH') &&
+                  similarity >= 70.0) {
+                isValidMatch = true;
                 print(
-                  '  ❌ EXCLUDED (Wrong meeting: $facePertemuan vs $currentPertemuan)',
+                  '  ✅ INCLUDED (Pertemuan + Tanggal + High similarity match)',
                 );
+              }
+              // Reject semua yang tidak memenuhi kriteria ketat
+              else {
+                print('  ❌ EXCLUDED - Reasons:');
+                if (faceDetailId != currentDetailId) {
+                  print(
+                    '     - Detail ID mismatch: $faceDetailId vs $currentDetailId',
+                  );
+                }
+                if (facePertemuan != currentPertemuan) {
+                  print(
+                    '     - Pertemuan mismatch: $facePertemuan vs $currentPertemuan',
+                  );
+                }
+                if (faceTanggal != currentTanggal) {
+                  print(
+                    '     - Tanggal mismatch: $faceTanggal vs $currentTanggal',
+                  );
+                }
+                if (matchType != 'EXACT_MATCH' && matchType != 'DATE_MATCH') {
+                  print('     - Invalid match type: $matchType');
+                }
+                if (similarity < 70.0) {
+                  print('     - Low similarity: $similarity%');
+                }
+              }
+
+              if (isValidMatch) {
+                filteredFaceData.add(face);
               }
             }
           } else {
-            // Jika pertemuan tidak diketahui, tampilkan semua dengan prioritas EXACT_MATCH
-            filteredFaceData =
-                faceData
-                    .where((face) => face['match_type'] == 'EXACT_MATCH')
-                    .toList();
             print(
-              '⚠️ No current meeting info, showing only EXACT_MATCH records',
+              '⚠️ Missing pertemuan or tanggal info, tidak bisa filter dengan akurat',
             );
           }
 
@@ -195,8 +384,9 @@ class _AttendanceDetailStudentPageState
           print('  - Original records: ${faceData.length}');
           print('  - Filtered records: ${filteredFaceData.length}');
           print('  - Current pertemuan: $currentPertemuan');
+          print('  - Current tanggal: $currentTanggal');
+          print('  - Status kehadiran: $currentStatus');
 
-          // Log filtered records
           for (int i = 0; i < filteredFaceData.length; i++) {
             final record = filteredFaceData[i];
             print(
@@ -206,19 +396,20 @@ class _AttendanceDetailStudentPageState
             print('  - similarity: ${record['similarity'] ?? 0}%');
             print('  - pertemuan: ${record['pertemuan'] ?? 'N/A'}');
             print('  - tanggal: ${record['tanggal'] ?? 'N/A'}');
+            print('  - detail_id: ${record['id_presensi_detail'] ?? 'N/A'}');
           }
 
           if (filteredFaceData.isNotEmpty) {
-            final matchTypes =
-                filteredFaceData
-                    .map((item) => item['match_type'] ?? 'UNKNOWN')
-                    .toSet();
             _showSuccessToast(
-              'Ditemukan ${filteredFaceData.length} hasil deteksi wajah untuk pertemuan $currentPertemuan (${matchTypes.join(', ')})',
+              '✅ Ditemukan ${filteredFaceData.length} hasil deteksi wajah yang valid',
             );
-          } else if (faceData.isNotEmpty) {
+          } else if (currentStatus == 'hadir' && faceData.isNotEmpty) {
             _showErrorToast(
-              'Tidak ada data face recognition untuk pertemuan $currentPertemuan (ditemukan ${faceData.length} data dari pertemuan lain)',
+              '⚠️ Tidak ada deteksi wajah yang sesuai untuk pertemuan ini (${faceData.length} data dari pertemuan/tanggal lain)',
+            );
+          } else if (currentStatus == 'hadir' && faceData.isEmpty) {
+            _showErrorToast(
+              '⚠️ Belum ada data deteksi wajah untuk presensi ini',
             );
           }
         } else {
@@ -229,7 +420,6 @@ class _AttendanceDetailStudentPageState
           print('API message: ${data['message'] ?? 'No message'}');
           print('Server response: ${data['status']}');
 
-          // Show more specific error message based on backend response
           final message =
               data['message'] ?? 'Data face recognition tidak ditemukan';
           if (message.contains('tidak ditemukan')) {
@@ -266,7 +456,7 @@ class _AttendanceDetailStudentPageState
   Future<void> _fetchDebugInfo() async {
     try {
       final debugUrl =
-          'http://10.167.91.233/aplikasi-checkin/api/debug_face_recognition.php';
+          'http://192.168.1.17/aplikasi-checkin/api/debug_face_recognition.php';
       print('Fetching debug info from: $debugUrl');
 
       final debugResponse = await http.get(Uri.parse(debugUrl));
@@ -289,7 +479,6 @@ class _AttendanceDetailStudentPageState
             print('  - Invalid matches: ${issueSummary['invalid_matches']}');
           }
 
-          // Log cross-meeting issues if any
           if (debugInfo['cross_meeting_issues'] != null) {
             final crossIssues = debugInfo['cross_meeting_issues'] as List;
             if (crossIssues.isNotEmpty) {
@@ -315,15 +504,15 @@ class _AttendanceDetailStudentPageState
     final prodi = detailData?['prodi'] ?? widget.presensi['prodi'] ?? '';
     final semester =
         detailData?['semester'] ?? widget.presensi['semester'] ?? '';
+    final tahunAjaran =
+        detailData?['tahun_ajaran'] ?? widget.presensi['tahun_ajaran'] ?? '';
     final mataPelajaran =
         detailData?['mata_pelajaran'] ??
         widget.presensi['mata_pelajaran'] ??
         '';
     final namaLengkap = detailData?['nama_lengkap'] ?? '';
     final jenisKelamin = detailData?['jenis_kelamin'] ?? '';
-    final foto =
-        detailData?['foto'] ??
-        'http://10.167.91.233/aplikasi-checkin/uploads/siswa/default.png';
+    final foto = _getPhotoUrl(detailData?['foto']);
     final status = (detailData?['status'] ?? '').toString();
     final keterangan = detailData?['keterangan'] ?? '';
     final statusManual = detailData?['status_manual'] ?? 0;
@@ -437,11 +626,7 @@ class _AttendanceDetailStudentPageState
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                CircleAvatar(
-                                  backgroundImage: NetworkImage(foto),
-                                  radius: 24,
-                                  onBackgroundImageError: (_, __) {},
-                                ),
+                                _buildStudentAvatar(foto),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
@@ -515,6 +700,26 @@ class _AttendanceDetailStudentPageState
                                 ),
                               ],
                             ),
+                            if (tahunAjaran.isNotEmpty && tahunAjaran != '0')
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      color: Colors.orange,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Tahun Ajaran: $tahunAjaran',
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             const SizedBox(height: 12),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -725,7 +930,6 @@ class _AttendanceDetailStudentPageState
                                   ],
                                 ),
                               ),
-                            // Loading indicator untuk face recognition data
                             if (isFaceDataLoading)
                               Padding(
                                 padding: const EdgeInsets.only(top: 16),
@@ -806,7 +1010,6 @@ class _AttendanceDetailStudentPageState
       statusText = 'Wajah Tidak Dikenali';
     }
 
-    // Determine match type color and info
     switch (matchType) {
       case 'EXACT_MATCH':
         matchTypeColor = Colors.green;
@@ -869,7 +1072,6 @@ class _AttendanceDetailStudentPageState
                 ],
               ),
 
-              // Match type indicator
               if (matchType != 'UNKNOWN_MATCH')
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -1232,7 +1434,7 @@ class _AttendanceDetailStudentPageState
       );
     }
     final String imageUrl =
-        'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
+        'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
     print('=== IMAGE LOADING DEBUG ===');
     print('Original foto_path: "$fotoPath"');
     print('Encoded image URL: $imageUrl');
@@ -1319,7 +1521,7 @@ class _AttendanceDetailStudentPageState
       );
     }
     final String imageUrl =
-        'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
+        'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
     print('Loading large image from URL: $imageUrl');
     return Image.network(
       imageUrl,

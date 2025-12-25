@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -28,7 +28,7 @@ class _StudentHomePageState extends State<StudentHomePage> {
   Future<void> fetchProfile() async {
     final response = await http.post(
       Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_profile_siswa.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_profile_siswa.php',
       ),
       body: {'email': widget.email},
     );

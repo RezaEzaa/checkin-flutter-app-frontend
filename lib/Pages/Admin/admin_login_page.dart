@@ -1,12 +1,12 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:checkin/Pages/settings_page.dart';
 import 'package:checkin/Pages/welcome_page.dart';
 import 'package:checkin/Pages/Admin/admin_forgot_password_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
@@ -14,10 +14,10 @@ class AdminLoginPage extends StatefulWidget {
   _AdminLoginPageState createState() => _AdminLoginPageState();
 }
 
-class _AdminLoginPageState extends State<AdminLoginPage> {
+class _AdminLoginPageState extends State<AdminLoginPage>
+    with LoadingStateMixin {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  bool isLoading = false;
   bool isPasswordVisible = false;
   bool rememberMe = false;
 
@@ -69,103 +69,61 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       _showErrorDialog("Silakan isi kata sandi.");
       return;
     }
-    setState(() {
-      isLoading = true;
-    });
-    try {
-      final response = await http.post(
-        Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/login_admin.php',
-        ),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "kata_sandi": password}),
-      );
-      dynamic responseData;
+
+    await executeWithLoading('login', () async {
       try {
-        responseData = jsonDecode(response.body);
-      } catch (e) {
-        _showErrorDialog(
-          "Gagal mengurai respon dari server:\n${response.body}",
-        );
-        return;
-      }
-      if (response.statusCode == 200 &&
-          responseData['message'] == 'Login berhasil') {
-        // Save credentials if remember me is checked
-        await _saveCredentials();
-
-        _showSuccessToast('Login berhasil!');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('admin_email', email);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) => WelcomePage(
-                  userType: 'Admin',
-                  namaLengkap: responseData['data']['nama_lengkap'],
-                  jenisKelamin: responseData['data']['jenis_kelamin'],
-                  userEmail: email,
-                ),
+        final response = await http.post(
+          Uri.parse(
+            'http://192.168.1.17/aplikasi-checkin/pages/admin/login_admin.php',
           ),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"email": email, "kata_sandi": password}),
         );
-      } else {
-        _showErrorDialog(responseData['message']);
-      }
-    } catch (e) {
-      _showErrorDialog('Terjadi kesalahan: $e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
 
-  void _showSuccessToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.grey,
-      fontSize: 16.0,
-    );
+        dynamic responseData;
+        try {
+          responseData = jsonDecode(response.body);
+        } catch (e) {
+          _showErrorDialog(
+            "Gagal mengurai respon dari server:\n${response.body}",
+          );
+          return;
+        }
+
+        if (response.statusCode == 200 &&
+            responseData['message'] == 'Login berhasil') {
+          await _saveCredentials();
+
+          showSuccess('Login berhasil!');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('admin_email', email);
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => WelcomePage(
+                    userType: 'Admin',
+                    namaLengkap: responseData['data']['nama_lengkap'],
+                    jenisKelamin: responseData['data']['jenis_kelamin'],
+                    userEmail: email,
+                  ),
+            ),
+          );
+        } else {
+          _showErrorDialog(responseData['message']);
+        }
+      } catch (e) {
+        _showErrorDialog('Terjadi kesalahan: $e');
+      }
+    });
   }
 
   void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: Row(
-            children: const [
-              Icon(Icons.warning_amber_rounded, color: Colors.red),
-              SizedBox(width: 8),
-              Text(
-                'Login Gagal',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: Text(message, style: const TextStyle(fontSize: 14)),
-          actions: <Widget>[
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('Tutup'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        );
-      },
+    DialogUtils.showErrorDialog(
+      context,
+      title: 'Login Gagal',
+      message: message,
     );
   }
 
@@ -271,24 +229,19 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
               ),
             ),
             const SizedBox(height: 16),
-            isLoading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                  width: 250,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.login),
-                    label: const Text('Masuk', style: TextStyle(fontSize: 16)),
-                    onPressed: loginAdmin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.indigo,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
+            LoadingButton(
+              isLoading: isLoading('login'),
+              loadingText: 'Memverifikasi...',
+              onPressed: loginAdmin,
+              icon: const Icon(Icons.login),
+              minimumSize: const Size(250, 48),
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text('Masuk', style: TextStyle(fontSize: 16)),
+            ),
           ],
         ),
       ),

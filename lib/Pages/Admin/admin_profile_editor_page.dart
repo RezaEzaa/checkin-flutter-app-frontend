@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -50,9 +50,20 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        _newProfileImage = File(pickedFile.path);
-      });
+      final file = File(pickedFile.path);
+      final fileSize = await file.length();
+      const maxSizeInBytes = 1024 * 1024; // 1 MB in bytes
+
+      if (fileSize > maxSizeInBytes) {
+        final fileSizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+        _showErrorDialog(
+          'Ukuran foto $fileSizeInMB MB melebihi batas maksimal 1 MB. Silakan pilih foto dengan ukuran lebih kecil.',
+        );
+      } else {
+        setState(() {
+          _newProfileImage = file;
+        });
+      }
     }
   }
 
@@ -67,7 +78,7 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
     var request = http.MultipartRequest(
       'POST',
       Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/edit_profile_admin.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/edit_profile_admin.php',
       ),
     );
     request.fields['id'] = widget.id;
@@ -85,7 +96,7 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
       final decoded = jsonDecode(responseBody);
-      print("Update Profile Response: $decoded"); // Debug log
+      print("Update Profile Response: $decoded");
 
       if (response.statusCode == 200 && decoded['status'] == 'success') {
         return {
@@ -143,22 +154,35 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
               ),
             ),
             const SizedBox(height: 20),
-            GestureDetector(
-              onTap: _pickImage,
-              child: CircleAvatar(
-                radius: 45,
-                backgroundImage:
-                    _newProfileImage != null
-                        ? FileImage(_newProfileImage!)
-                        : (_photoUrl.isNotEmpty
-                                ? NetworkImage(_photoUrl)
-                                : null)
-                            as ImageProvider?,
-                child:
-                    _newProfileImage == null && _photoUrl.isEmpty
-                        ? const Icon(Icons.camera_alt, size: 36)
-                        : null,
-              ),
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: CircleAvatar(
+                    radius: 45,
+                    backgroundImage:
+                        _newProfileImage != null
+                            ? FileImage(_newProfileImage!)
+                            : (_photoUrl.isNotEmpty
+                                    ? NetworkImage(_photoUrl)
+                                    : null)
+                                as ImageProvider?,
+                    child:
+                        _newProfileImage == null && _photoUrl.isEmpty
+                            ? const Icon(Icons.camera_alt, size: 36)
+                            : null,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Tap untuk mengubah foto (max 1 MB)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             _buildTextField(
@@ -201,7 +225,6 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
                   Map<String, dynamic> result = await _saveProfile();
                   if (!mounted) return;
                   if (result['status'] == "success") {
-                    // Show success message with details
                     _showSuccessDialog(result);
                   } else {
                     _showErrorDialog(result['message']);
@@ -383,8 +406,8 @@ class _ProfileAdminEditorPageState extends State<ProfileAdminEditorPage> {
               TextButton(
                 child: const Text('OK'),
                 onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Return to previous page
+                  Navigator.pop(context);
+                  Navigator.pop(context);
                 },
               ),
             ],

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
@@ -20,13 +20,14 @@ class AttendanceRecapPage extends StatefulWidget {
 }
 
 class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
-  bool isLoadingDownload = false;
+  bool isLoadingDownloadRecap = false;
+  bool isLoadingDownloadExcel = false;
   bool isLoadingUpload = false;
   bool isLoadingUpdate = false;
   bool isLoadingTemplate = false;
   bool hasUploadedData = false;
   bool isCheckingUploadStatus = true;
-  String importMode = 'replace_all'; // Add import mode variable
+  String importMode = 'replace_all';
   @override
   void initState() {
     super.initState();
@@ -41,7 +42,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       debugPrint("🔍 Checking upload status for email: $guruEmail");
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/check_upload_status.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/check_upload_status.php',
         ),
         body: {'guru_email': guruEmail},
       );
@@ -166,13 +167,13 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
   }
 
   Future<void> _downloadAttendanceRecap() async {
-    setState(() => isLoadingDownload = true);
+    setState(() => isLoadingDownloadRecap = true);
     try {
       if (Platform.isAndroid && (await _androidVersion() <= 29)) {
         final status = await Permission.storage.request();
         if (!status.isGranted) {
           _showErrorDialog('Izin penyimpanan ditolak');
-          setState(() => isLoadingDownload = false);
+          setState(() => isLoadingDownloadRecap = false);
           return;
         }
       }
@@ -181,12 +182,12 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
 
       if (guruEmail.isEmpty) {
         _showErrorDialog('Email guru tidak ditemukan. Silakan login ulang.');
-        setState(() => isLoadingDownload = false);
+        setState(() => isLoadingDownloadRecap = false);
         return;
       }
 
       final url =
-          'http://10.167.91.233/aplikasi-checkin/pages/rekap/export_attendance_excel.php';
+          'http://192.168.1.17/aplikasi-checkin/pages/rekap/export_attendance_excel.php';
       debugPrint("📤 Downloading attendance recap for email: $guruEmail");
 
       final response = await http
@@ -204,6 +205,15 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       debugPrint(
         "📥 Response content-type: ${response.headers['content-type']}",
       );
+      debugPrint("📥 Response body length: ${response.bodyBytes.length}");
+
+      // Debug: Show first 500 characters of response if it's not Excel
+      final contentType = response.headers['content-type'] ?? '';
+      if (!contentType.contains('spreadsheet') &&
+          !contentType.contains('excel')) {
+        final responseText = utf8.decode(response.bodyBytes.take(500).toList());
+        debugPrint("📥 Response text preview: $responseText");
+      }
 
       if (response.statusCode == 400) {
         throw Exception('Email guru tidak valid atau tidak diberikan');
@@ -215,17 +225,30 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
         );
       }
 
-      final contentType = response.headers['content-type'] ?? '';
       if (!contentType.contains('spreadsheet') &&
           !contentType.contains('excel')) {
         final responseText = utf8.decode(response.bodyBytes);
-        if (responseText.contains('Tidak ada data') ||
-            responseText.contains('data presensi')) {
-          throw Exception(
-            'Tidak ada data presensi yang ditemukan untuk guru ini',
-          );
+        debugPrint("📥 Non-Excel response received: $responseText");
+
+        // Check if it's a JSON error response
+        try {
+          final jsonError = jsonDecode(responseText);
+          if (jsonError['error'] != null) {
+            throw Exception(jsonError['error']);
+          }
+        } catch (e) {
+          // Not a JSON response, check for common error messages
+          if (responseText.contains('Tidak ada data') ||
+              responseText.contains('data presensi')) {
+            throw Exception(
+              'Tidak ada data presensi yang ditemukan untuk guru ini',
+            );
+          }
         }
-        throw Exception('Response bukan file Excel yang valid');
+
+        throw Exception(
+          'Response bukan file Excel yang valid. Server mengembalikan: ${responseText.substring(0, responseText.length > 100 ? 100 : responseText.length)}...',
+        );
       }
       final directory = await getTemporaryDirectory();
       final tempPath = '${directory.path}/rekap_presensi.xlsx';
@@ -264,7 +287,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
 
       _showErrorDialog(errorMessage);
     } finally {
-      setState(() => isLoadingDownload = false);
+      setState(() => isLoadingDownloadRecap = false);
     }
   }
 
@@ -278,7 +301,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       final dio = Dio();
       const fileName = "Data_Mata_Pelajaran.xlsx";
       const url =
-          "http://10.167.91.233/aplikasi-checkin/pages/admin/download_templates.php?file=$fileName";
+          "http://192.168.1.17/aplikasi-checkin/pages/admin/download_templates.php?file=$fileName";
       final directory = await getTemporaryDirectory();
       final tempPath = "${directory.path}/$fileName";
       await dio.download(url, tempPath);
@@ -300,7 +323,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
   }
 
   Future<void> _uploadFileMataPelajaran() async {
-    // Only for first upload when no data exists - no import mode needed
     await _processUploadMataPelajaran();
   }
 
@@ -324,7 +346,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       }
 
       const url =
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/import_mata_pelajaran.php';
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/import_mata_pelajaran.php';
       final prefs = await SharedPreferences.getInstance();
       final guruEmail = prefs.getString('guru_email') ?? '';
 
@@ -391,7 +413,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
   }
 
   Future<void> _updateFileMataPelajaran() async {
-    // Show import mode dialog first
     await _showImportModeDialog(() => _processUpdateFileMataPelajaran());
   }
 
@@ -418,7 +439,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       }
 
       const url =
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/update_mata_pelajaran.php';
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/update_mata_pelajaran.php';
       final prefs = await SharedPreferences.getInstance();
       final guruEmail = prefs.getString('guru_email') ?? '';
 
@@ -432,7 +453,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       var request = http.MultipartRequest('POST', Uri.parse(url));
       request.files.add(await http.MultipartFile.fromPath('file', file.path));
       request.fields['guru_email'] = guruEmail;
-      request.fields['import_mode'] = importMode; // Add import mode parameter
+      request.fields['import_mode'] = importMode;
 
       var response = await request.send().timeout(
         const Duration(minutes: 5),
@@ -805,7 +826,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                   icon: Icons.download_for_offline,
                   label: "Unduh Rekap Presensi",
                   onPressed: _downloadAttendanceRecap,
-                  isLoading: isLoadingDownload,
+                  isLoading: isLoadingDownloadRecap,
                   loadingText: "Memproses rekap presensi...",
                 ),
               ],
@@ -824,7 +845,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                   color: Colors.teal,
                 ),
                 const SizedBox(height: 12),
-                // Tombol upload hanya tampil jika belum ada data
                 if (!hasUploadedData && !isCheckingUploadStatus) ...[
                   buildActionButton(
                     icon: Icons.upload_file,
@@ -834,7 +854,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                     color: Colors.blueAccent,
                   ),
                 ],
-                // Info dan tombol tambahan hanya tampil jika sudah ada data
                 if (hasUploadedData && !isCheckingUploadStatus) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -866,7 +885,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                     icon: Icons.download,
                     label: "Download File Excel Mata Pelajaran",
                     onPressed: _downloadUploadedExcel,
-                    isLoading: isLoadingDownload,
+                    isLoading: isLoadingDownloadExcel,
                     color: Colors.green,
                   ),
                   const SizedBox(height: 12),
@@ -878,7 +897,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                     color: Colors.orange,
                   ),
                 ],
-                // Info untuk user yang belum upload
                 if (!hasUploadedData && !isCheckingUploadStatus) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -906,7 +924,6 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
                     ),
                   ),
                 ],
-                // Loading state
                 if (isCheckingUploadStatus) ...[
                   const SizedBox(height: 12),
                   const Center(
@@ -936,12 +953,12 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
   }
 
   Future<void> _downloadUploadedExcel() async {
-    setState(() => isLoadingDownload = true);
+    setState(() => isLoadingDownloadExcel = true);
     try {
       final prefs = await SharedPreferences.getInstance();
       final guruEmail = prefs.getString('guru_email') ?? '';
       final url =
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/download_file_excel.php?email_guru=$guruEmail';
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/download_file_excel.php?email_guru=$guruEmail';
       debugPrint("📤 Downloading uploaded Excel for email: $guruEmail");
       final response = await http.get(Uri.parse(url));
       debugPrint("📥 Download response status: ${response.statusCode}");
@@ -976,7 +993,7 @@ class _AttendanceRecapPageState extends State<AttendanceRecapPage> {
       debugPrint("❌ Error downloading uploaded Excel: $e");
       _showErrorDialog('Error: ${e.toString()}');
     } finally {
-      setState(() => isLoadingDownload = false);
+      setState(() => isLoadingDownloadExcel = false);
     }
   }
 }

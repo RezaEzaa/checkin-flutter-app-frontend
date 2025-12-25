@@ -1,8 +1,8 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class ForgotPasswordAdminPage extends StatefulWidget {
   const ForgotPasswordAdminPage({super.key});
@@ -11,80 +11,67 @@ class ForgotPasswordAdminPage extends StatefulWidget {
       _ForgotPasswordAdminPageState();
 }
 
-class _ForgotPasswordAdminPageState extends State<ForgotPasswordAdminPage> {
+class _ForgotPasswordAdminPageState extends State<ForgotPasswordAdminPage>
+    with LoadingStateMixin {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-  bool _isLoading = false;
   bool _isNewPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
+
     if (email.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty) {
-      _showErrorDialog('Semua field harus diisi.');
+      showError('Semua field harus diisi.');
       return;
     }
+
     if (newPassword != confirmPassword) {
-      _showErrorDialog('Password baru dan konfirmasi tidak sama.');
+      showError('Kata Sandi baru dan konfirmasi tidak sama.');
       return;
     }
-    setState(() => _isLoading = true);
-    try {
+
+    if (newPassword.length < 6) {
+      showError('Kata Sandi baru harus minimal 6 karakter.');
+      return;
+    }
+
+    await executeWithLoading('Memperbarui password...', () async {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/update_password_admin.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/update_password_admin.php',
         ),
-        body: {'email': email, 'new_password': newPassword},
+        body: {
+          'email': email,
+          'new_password': newPassword,
+          'confirm_password': confirmPassword,
+          'forgot_password': 'true',
+        },
       );
+
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        if (result['status'] == 'success') {
-          _showSuccessToast('Password berhasil diperbarui.');
-          Navigator.pop(context);
-        } else {
-          _showErrorDialog(result['message'] ?? 'Gagal memperbarui password.');
+        try {
+          final result = json.decode(response.body);
+          if (result['status'] == 'success') {
+            showSuccess('Password berhasil diperbarui.');
+            Navigator.pop(context);
+          } else {
+            showError(result['message'] ?? 'Gagal memperbarui password.');
+          }
+        } catch (e) {
+          // Server mengembalikan HTML atau response yang tidak valid
+          print('Response body: ${response.body}');
+          showError(
+            'Server mengembalikan response yang tidak valid. Periksa koneksi atau hubungi administrator.',
+          );
         }
       } else {
-        _showErrorDialog(
-          'Terjadi kesalahan pada server: ${response.statusCode}',
-        );
+        showError('Terjadi kesalahan pada server: ${response.statusCode}');
       }
-    } catch (e) {
-      _showErrorDialog('Terjadi kesalahan: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _showSuccessToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green,
-      fontSize: 16.0,
-    );
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Terjadi Kesalahan'),
-            content: Text(message),
-            actions: [
-              TextButton(
-                child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-    );
+    });
   }
 
   @override
@@ -118,7 +105,7 @@ class _ForgotPasswordAdminPageState extends State<ForgotPasswordAdminPage> {
                 ),
                 _buildTextField(
                   _newPasswordController,
-                  'Password Baru',
+                  'Kata Sandi Baru (Min. 6 Karakter)',
                   !_isNewPasswordVisible,
                   () {
                     setState(() {
@@ -129,7 +116,7 @@ class _ForgotPasswordAdminPageState extends State<ForgotPasswordAdminPage> {
                 ),
                 _buildTextField(
                   _confirmPasswordController,
-                  'Konfirmasi Password Baru',
+                  'Konfirmasi Kata Sandi Baru (Min. 6 Karakter)',
                   !_isConfirmPasswordVisible,
                   () {
                     setState(() {
@@ -139,28 +126,36 @@ class _ForgotPasswordAdminPageState extends State<ForgotPasswordAdminPage> {
                   icon: Icons.lock_person_outlined,
                 ),
                 const SizedBox(height: 30),
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text(
-                          'Reset Password',
-                          style: TextStyle(fontSize: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: LoadingButton(
+                    onPressed: _resetPassword,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.indigo,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.refresh, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text(
+                              'Reset Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: _resetPassword,
                       ),
                     ),
+                  ),
+                ),
               ],
             ),
           ),

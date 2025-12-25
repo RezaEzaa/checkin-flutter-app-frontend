@@ -27,9 +27,29 @@ android {
         versionName = "1.0"
     }
 
+    // Disable lint untuk save memory pada laptop 4GB RAM
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            // Minify untuk reduce APK size
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
+
+    // Custom APK output file name
+    applicationVariants.all {
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val variantName = this.name
+            if (variantName == "release") {
+                output.outputFileName = "CheckIn.apk"
+            }
         }
     }
 }

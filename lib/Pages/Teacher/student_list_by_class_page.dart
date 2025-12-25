@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,10 +8,12 @@ import 'package:fluttertoast/fluttertoast.dart';
 class StudentListByClassPage extends StatefulWidget {
   final String kelas;
   final String prodi;
+  final String tahunAjaran;
   const StudentListByClassPage({
     super.key,
     required this.kelas,
     required this.prodi,
+    required this.tahunAjaran,
   });
   @override
   State<StudentListByClassPage> createState() => _StudentListByClassPageState();
@@ -30,10 +32,13 @@ class _StudentListByClassPageState extends State<StudentListByClassPage> {
   Future<void> loadGuruEmailAndFetchStudents() async {
     final prefs = await SharedPreferences.getInstance();
     guruEmail = prefs.getString('guru_email');
-    if (guruEmail != null) {
+    debugPrint('🔍 Loaded guru_email from prefs: $guruEmail');
+
+    if (guruEmail != null && guruEmail!.isNotEmpty) {
       await fetchStudents();
     } else {
-      _showErrorDialog("Guru email tidak ditemukan");
+      debugPrint('❌ No guru_email found in SharedPreferences');
+      _showErrorDialog("Guru email tidak ditemukan. Silakan login ulang.");
       setState(() => isLoading = false);
     }
   }
@@ -41,24 +46,102 @@ class _StudentListByClassPageState extends State<StudentListByClassPage> {
   Future<void> fetchStudents() async {
     setState(() => isLoading = true);
     try {
+      // Extract actual kelas and tahun_ajaran from the complex object
+      String actualKelas = widget.kelas;
+      String actualTahunAjaran = widget.tahunAjaran;
+
+      // Check if kelas is a JSON-like string and extract the actual values
+      if (widget.kelas.contains('{') && widget.kelas.contains('kelas:')) {
+        debugPrint('🔧 Parsing complex kelas object: ${widget.kelas}');
+        try {
+          // Try to extract kelas value from string like "{kelas: X, tahun_ajaran: 2025/2026}"
+          final kelasMatch = RegExp(
+            r'kelas:\s*([^,}]+)',
+          ).firstMatch(widget.kelas);
+          final tahunMatch = RegExp(
+            r'tahun_ajaran:\s*([^}]+)',
+          ).firstMatch(widget.kelas);
+
+          if (kelasMatch != null) {
+            actualKelas = kelasMatch.group(1)?.trim() ?? widget.kelas;
+            debugPrint('🔧 Extracted kelas: $actualKelas');
+          }
+
+          if (tahunMatch != null && widget.tahunAjaran.isEmpty) {
+            actualTahunAjaran =
+                tahunMatch.group(1)?.trim() ?? widget.tahunAjaran;
+            debugPrint('🔧 Extracted tahun_ajaran: $actualTahunAjaran');
+          }
+        } catch (e) {
+          debugPrint('⚠️ Failed to parse complex kelas object: $e');
+          // Use original values if parsing fails
+        }
+      }
+
       final uri = Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/guru/get_students_by_class.php?kelas=${Uri.encodeComponent(widget.kelas)}&prodi=${Uri.encodeComponent(widget.prodi)}&guru_email=${Uri.encodeComponent(guruEmail!)}',
+        'http://192.168.1.17/aplikasi-checkin/pages/guru/get_students_by_class.php?kelas=${Uri.encodeComponent(actualKelas)}&prodi=${Uri.encodeComponent(widget.prodi)}&tahun_ajaran=${Uri.encodeComponent(actualTahunAjaran)}&guru_email=${Uri.encodeComponent(guruEmail!)}',
       );
+
+      debugPrint('🔍 Fetching students with parameters:');
+      debugPrint('   Original Kelas: ${widget.kelas}');
+      debugPrint('   Actual Kelas: $actualKelas');
+      debugPrint('   Prodi: ${widget.prodi}');
+      debugPrint('   Original Tahun Ajaran: ${widget.tahunAjaran}');
+      debugPrint('   Actual Tahun Ajaran: $actualTahunAjaran');
+      debugPrint('   Guru Email: $guruEmail');
+      debugPrint('📍 Request URL: $uri');
+
       final response = await http.get(uri);
+      debugPrint('📥 Response status: ${response.statusCode}');
+      debugPrint('📥 Response body: ${response.body}');
+
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = json.decode(response.body);
+        debugPrint('📊 Parsed data: $data');
+
         if (data['status'] == true) {
-          setState(
-            () => students = List<Map<String, dynamic>>.from(data['data']),
-          );
-          _showSuccessToast("Data siswa berhasil dimuat.");
+          if (data.containsKey('data') && data['data'] is List) {
+            final studentList = List<Map<String, dynamic>>.from(data['data']);
+            debugPrint('✅ Found ${studentList.length} students');
+
+            // Debug each student data
+            for (int i = 0; i < studentList.length && i < 3; i++) {
+              debugPrint('📋 Student $i: ${studentList[i]}');
+            }
+
+            setState(() {
+              students = studentList;
+            });
+
+            if (studentList.isNotEmpty) {
+              _showSuccessToast(
+                "Data siswa berhasil dimuat (${studentList.length} siswa).",
+              );
+            } else {
+              debugPrint('⚠️ Student list is empty');
+              _showErrorDialog("Tidak ada siswa ditemukan untuk kelas ini.");
+            }
+          } else {
+            debugPrint(
+              '❌ Data field is missing or not a List: ${data['data']}',
+            );
+            _showErrorDialog("Format data tidak valid dari server.");
+          }
         } else {
-          _showErrorDialog(data['message'] ?? "Gagal memuat data siswa.");
+          final message =
+              data['message']?.toString() ?? "Gagal memuat data siswa.";
+          debugPrint('❌ Server returned status false: $message');
+          _showErrorDialog(message);
         }
       } else {
+        debugPrint(
+          '❌ Invalid response: Status ${response.statusCode}, Body: ${response.body}',
+        );
         _showErrorDialog("Gagal koneksi. Status ${response.statusCode}.");
       }
     } catch (e) {
+      debugPrint('❌ Error in fetchStudents: $e');
+      debugPrint('❌ Error type: ${e.runtimeType}');
       _showErrorDialog("Kesalahan: ${e.toString()}");
     } finally {
       setState(() => isLoading = false);
@@ -95,10 +178,24 @@ class _StudentListByClassPageState extends State<StudentListByClassPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Extract actual kelas for display
+    String displayKelas = widget.kelas;
+    if (widget.kelas.contains('{') && widget.kelas.contains('kelas:')) {
+      final kelasMatch = RegExp(r'kelas:\s*([^,}]+)').firstMatch(widget.kelas);
+      if (kelasMatch != null) {
+        displayKelas = kelasMatch.group(1)?.trim() ?? widget.kelas;
+      }
+    }
+
     final title =
         widget.prodi.isNotEmpty
-            ? '${widget.kelas} (${widget.prodi})'
-            : widget.kelas;
+            ? '$displayKelas (${widget.prodi})'
+            : displayKelas;
+
+    debugPrint(
+      '🎨 Building UI - isLoading: $isLoading, students count: ${students.length}',
+    );
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -159,7 +256,7 @@ class _StudentListByClassPageState extends State<StudentListByClassPage> {
                             final colorJK = isLaki ? Colors.blue : Colors.pink;
                             final fotoUrl =
                                 student['foto'] ??
-                                'http://10.167.91.233/aplikasi-checkin/uploads/siswa/default.png';
+                                'http://192.168.1.17/aplikasi-checkin/uploads/siswa/default.png';
                             return Card(
                               margin: const EdgeInsets.symmetric(
                                 vertical: 5,

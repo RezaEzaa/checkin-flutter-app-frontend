@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -31,15 +31,15 @@ class _SchoolInfoPageState extends State<SchoolInfoPage> {
       switch (widget.userRole) {
         case 'admin':
           endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/admin/get_sekolah_info.php';
+              'http://192.168.1.17/aplikasi-checkin/pages/admin/get_sekolah_info.php';
           break;
         case 'guru':
           endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/guru/get_sekolah_info.php';
+              'http://192.168.1.17/aplikasi-checkin/pages/guru/get_sekolah_info.php';
           break;
         case 'siswa':
           endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_sekolah_info.php';
+              'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_sekolah_info.php';
           break;
         default:
           throw Exception('Invalid user role');
@@ -872,7 +872,7 @@ class _SchoolInfoPageState extends State<SchoolInfoPage> {
     try {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/edit_sekolah_info.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/edit_sekolah_info.php',
         ),
         body: {
           'id': id,

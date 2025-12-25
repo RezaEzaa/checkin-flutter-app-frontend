@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -35,11 +35,11 @@ class _AdminCreatorInfoPageState extends State<AdminCreatorInfoPage> {
       switch (widget.userRole) {
         case 'guru':
           endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/guru/get_admin_creator.php';
+              'http://192.168.1.17/aplikasi-checkin/pages/guru/get_admin_creator.php';
           break;
         case 'siswa':
           endpoint =
-              'http://10.167.91.233/aplikasi-checkin/pages/siswa/get_admin_creator.php';
+              'http://192.168.1.17/aplikasi-checkin/pages/siswa/get_admin_creator.php';
           break;
         default:
           throw Exception('Invalid user role');
@@ -179,8 +179,8 @@ class _AdminCreatorInfoPageState extends State<AdminCreatorInfoPage> {
     final photoUrl =
         adminData!['admin_foto'] != null &&
                 adminData!['admin_foto'].toString().isNotEmpty
-            ? 'http://10.167.91.233/aplikasi-checkin/uploads/admin/${Uri.encodeComponent(adminData!['admin_foto'])}'
-            : 'http://10.167.91.233/aplikasi-checkin/uploads/admin/default.png';
+            ? 'http://192.168.1.17/aplikasi-checkin/uploads/admin/foto_admin/${Uri.encodeComponent(adminData!['admin_foto'])}'
+            : 'http://192.168.1.17/aplikasi-checkin/uploads/admin/default.png';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

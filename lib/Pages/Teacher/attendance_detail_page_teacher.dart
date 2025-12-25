@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fluttertoast/fluttertoast.dart';
@@ -14,6 +14,7 @@ class AttendanceDetailPageTeacher extends StatefulWidget {
   final String jam;
   final String semester;
   final String prodi;
+  final String tahunAjaran;
   const AttendanceDetailPageTeacher({
     Key? key,
     required this.kelas,
@@ -24,6 +25,7 @@ class AttendanceDetailPageTeacher extends StatefulWidget {
     required this.jam,
     required this.semester,
     required this.prodi,
+    required this.tahunAjaran,
   }) : super(key: key);
   @override
   _AttendanceDetailPageTeacherState createState() =>
@@ -36,6 +38,21 @@ class _AttendanceDetailPageTeacherState
   List<Map<String, dynamic>> siswaList = [];
   bool isUpdating = false;
   Map<int, List<Map<String, dynamic>>> faceRecognitionData = {};
+
+  String _getPhotoUrl(String? foto) {
+    if (foto == null || foto.isEmpty) {
+      return 'http://192.168.1.17/aplikasi-checkin/uploads/siswa/default.png';
+    }
+
+    // If foto already contains full URL, return as is
+    if (foto.startsWith('http')) {
+      return foto;
+    }
+
+    // Construct URL with different possible paths
+    return 'http://192.168.1.17/aplikasi-checkin/uploads/siswa/$foto';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +64,7 @@ class _AttendanceDetailPageTeacherState
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_by_class.php?id_presensi_kelas=${widget.idPresensiKelas}',
+          'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_by_class.php?id_presensi_kelas=${widget.idPresensiKelas}',
         ),
       );
       if (response.statusCode == 200) {
@@ -78,15 +95,30 @@ class _AttendanceDetailPageTeacherState
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/get_detail_presensi_guru.php?id_presensi_kelas=${widget.idPresensiKelas}',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/get_detail_presensi_guru.php?id_presensi_kelas=${widget.idPresensiKelas}',
         ),
       );
+
+      print('📥 Attendance API Response Status: ${response.statusCode}');
+      print('📥 Attendance API Response Body: ${response.body}');
+
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = json.decode(response.body);
+        print('📊 Parsed attendance data: $data');
+
         if (data['status'] == true && data['data'] != null) {
           if (mounted) {
+            final studentData = List<Map<String, dynamic>>.from(data['data']);
+
+            // Debug foto URLs
+            for (var student in studentData) {
+              print(
+                '👤 Student: ${student['nama_lengkap']} - Foto: ${student['foto']}',
+              );
+            }
+
             setState(() {
-              siswaList = List<Map<String, dynamic>>.from(data['data']);
+              siswaList = studentData;
             });
           }
         } else {
@@ -96,6 +128,7 @@ class _AttendanceDetailPageTeacherState
         _showErrorDialog('Gagal menghubungi server.');
       }
     } catch (e) {
+      print('❌ Error in fetchAttendanceData: $e');
       _showErrorDialog('Terjadi kesalahan koneksi: $e');
     } finally {
       if (mounted) {
@@ -113,7 +146,7 @@ class _AttendanceDetailPageTeacherState
     try {
       final response = await http.post(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/guru/edit_presensi_siswa.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/guru/edit_presensi_siswa.php',
         ),
         body: {
           'id_presensi_detail': idPresensiDetail.toString(),
@@ -280,7 +313,7 @@ class _AttendanceDetailPageTeacherState
                         radius: 20,
                         backgroundImage: NetworkImage(
                           siswa['foto']?.toString() ??
-                              'http://10.167.91.233/aplikasi-checkin/uploads/siswa/default.png',
+                              'http://192.168.1.17/aplikasi-checkin/uploads/siswa/default.png',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -636,7 +669,7 @@ class _AttendanceDetailPageTeacherState
       );
     }
     final String imageUrl =
-        'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
+        'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
     print('=== IMAGE LOADING DEBUG ===');
     print('Original foto_path: "$fotoPath"');
     print('Encoded image URL: $imageUrl');
@@ -723,7 +756,7 @@ class _AttendanceDetailPageTeacherState
       );
     }
     final String imageUrl =
-        'http://10.167.91.233/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
+        'http://192.168.1.17/aplikasi-checkin/api/get_face_recognition_image.php?foto_path=${Uri.encodeQueryComponent(fotoPath)}';
     print('Loading large image from URL: $imageUrl');
     return Image.network(
       imageUrl,
@@ -872,27 +905,27 @@ class _AttendanceDetailPageTeacherState
             _buildHeaderInfo(
               Icons.school,
               'Prodi: ${widget.prodi}',
-              Colors.indigo[600]!,
+              const Color(0xFF3F51B5), // Indigo color
             ),
             _buildHeaderInfo(
-              Icons.class_,
+              Icons.class_outlined,
               'Kelas: ${widget.kelas}',
-              Colors.teal[600]!,
+              const Color(0xFF009688), // Teal color
             ),
             _buildHeaderInfo(
               Icons.timelapse,
               'Semester: ${widget.semester}',
-              Colors.purple[500]!,
+              const Color(0xFF9C27B0), // Purple color
             ),
             _buildHeaderInfo(
               Icons.calendar_today,
               widget.tanggal,
-              Colors.blue[600]!,
+              const Color(0xFF2196F3), // Blue color
             ),
             _buildHeaderInfo(
               Icons.access_time,
               widget.jam,
-              Colors.deepOrange[500]!,
+              const Color(0xFFFF5722), // Deep Orange color
             ),
           ],
         ),
@@ -965,9 +998,9 @@ class _AttendanceDetailPageTeacherState
                                 itemCount: siswaList.length,
                                 itemBuilder: (context, index) {
                                   final siswa = siswaList[index];
-                                  final fotoUrl =
-                                      siswa['foto']?.toString() ??
-                                      'http://10.167.91.233/aplikasi-checkin/uploads/siswa/default.png';
+                                  final fotoUrl = _getPhotoUrl(
+                                    siswa['foto']?.toString(),
+                                  );
                                   final statusInfo = _getStatusInfo(siswa);
                                   return Card(
                                     elevation: 2,
@@ -1006,8 +1039,28 @@ class _AttendanceDetailPageTeacherState
                                                 backgroundImage: NetworkImage(
                                                   fotoUrl,
                                                 ),
-                                                onBackgroundImageError:
-                                                    (_, __) {},
+                                                onBackgroundImageError: (
+                                                  exception,
+                                                  stackTrace,
+                                                ) {
+                                                  print(
+                                                    '❌ Error loading photo for ${siswa['nama_lengkap']}: $exception',
+                                                  );
+                                                  print(
+                                                    '📷 Photo URL was: $fotoUrl',
+                                                  );
+                                                },
+                                                child:
+                                                    fotoUrl.contains(
+                                                          'default.png',
+                                                        )
+                                                        ? Icon(
+                                                          Icons.person,
+                                                          size: 30,
+                                                          color:
+                                                              Colors.grey[400],
+                                                        )
+                                                        : null,
                                               ),
                                               if (faceRecognitionData
                                                   .containsKey(

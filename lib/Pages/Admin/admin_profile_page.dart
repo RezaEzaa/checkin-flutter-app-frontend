@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -39,7 +39,7 @@ class _ProfileAdminPageState extends State<ProfileAdminPage> {
     setState(() => isLoading = true);
     final response = await http.post(
       Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/get_profile_admin.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/get_profile_admin.php',
       ),
       body: {'email': widget.email},
     );
@@ -70,7 +70,7 @@ class _ProfileAdminPageState extends State<ProfileAdminPage> {
     try {
       final response = await http.get(
         Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/get_sekolah_info.php',
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/get_sekolah_info.php',
         ),
       );
       if (response.statusCode == 200) {
@@ -106,7 +106,7 @@ class _ProfileAdminPageState extends State<ProfileAdminPage> {
     if (confirm != true) return;
     final response = await http.post(
       Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/delete_account_admin.php',
+        'http://192.168.1.17/aplikasi-checkin/pages/admin/delete_account_admin.php',
       ),
       body: {'email': widget.email},
     );

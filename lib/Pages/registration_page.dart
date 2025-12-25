@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:checkin/Pages/settings_page.dart';
 import 'package:checkin/Pages/Admin/admin_signup_page.dart';

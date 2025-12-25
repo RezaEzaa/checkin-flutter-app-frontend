@@ -1,12 +1,12 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:checkin/Pages/Admin/admin_login_page.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class AdminSignupPage extends StatefulWidget {
   const AdminSignupPage({super.key});
@@ -14,7 +14,8 @@ class AdminSignupPage extends StatefulWidget {
   _AdminSignupPageState createState() => _AdminSignupPageState();
 }
 
-class _AdminSignupPageState extends State<AdminSignupPage> {
+class _AdminSignupPageState extends State<AdminSignupPage>
+    with LoadingStateMixin {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController namaController = TextEditingController();
   final TextEditingController kataSandiController = TextEditingController();
@@ -25,47 +26,50 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
   String? selectedGender;
   File? selectedImage;
   final picker = ImagePicker();
-  bool isLoading = false;
   bool isPasswordVisible = false;
   bool isConfirmPasswordVisible = false;
   Future<void> pickImage() async {
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        selectedImage = File(pickedFile.path);
-      });
-    }
-  }
+    setLoading('pickImage', true);
 
-  void _showSuccessToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.grey,
-      fontSize: 16.0,
-    );
+    try {
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        final file = File(pickedFile.path);
+        final fileSize = await file.length();
+        const maxSizeInBytes = 1024 * 1024; // 1 MB in bytes
+
+        if (fileSize > maxSizeInBytes) {
+          final fileSizeInMB = (fileSize / (1024 * 1024)).toStringAsFixed(2);
+          _showErrorDialog(
+            'Ukuran File Terlalu Besar',
+            'Ukuran foto $fileSizeInMB MB melebihi batas maksimal 1 MB. Silakan pilih foto dengan ukuran lebih kecil.',
+          );
+        } else {
+          setState(() {
+            selectedImage = file;
+          });
+          showSuccess('Foto berhasil dipilih');
+        }
+      }
+    } catch (e) {
+      showError('Gagal memilih foto: $e');
+    }
+
+    setLoading('pickImage', false);
   }
 
   void _showErrorDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        );
-      },
-    );
+    DialogUtils.showErrorDialog(context, title: title, message: message);
   }
 
   Future<void> registerAdmin() async {
+    if (kataSandiController.text.length < 6) {
+      _showErrorDialog(
+        'Registrasi Gagal',
+        'Kata sandi harus minimal 6 karakter',
+      );
+      return;
+    }
     if (kataSandiController.text != konfirmasiKataSandiController.text) {
       _showErrorDialog(
         'Registrasi Gagal',
@@ -85,45 +89,47 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
       _showErrorDialog('Registrasi Gagal', 'Upload foto terlebih dahulu');
       return;
     }
-    setState(() {
-      isLoading = true;
-    });
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse(
-          'http://10.167.91.233/aplikasi-checkin/pages/admin/register_admin.php',
-        ),
-      );
-      request.fields['nama_lengkap'] = namaController.text;
-      request.fields['email'] = emailController.text;
-      request.fields['jenis_kelamin'] = selectedGender!;
-      request.fields['jabatan'] = jabatanController.text;
-      request.fields['nama_sekolah'] = namaSekolahController.text;
-      request.fields['kata_sandi'] = kataSandiController.text;
-      request.files.add(
-        await http.MultipartFile.fromPath('foto', selectedImage!.path),
-      );
-      var response = await request.send();
-      var responseBody = await response.stream.bytesToString();
-      var responseData = jsonDecode(responseBody);
-      if (response.statusCode == 200 &&
-          responseData['message'] == 'Registrasi admin berhasil') {
-        _showSuccessToast('Registrasi berhasil! Silakan login');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminLoginPage()),
+
+    await executeWithLoading('register', () async {
+      try {
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse(
+            'http://192.168.1.17/aplikasi-checkin/pages/admin/register_admin.php',
+          ),
         );
-      } else {
-        _showErrorDialog('Registrasi Gagal', responseData['message']);
+        request.fields['nama_lengkap'] = namaController.text;
+        request.fields['email'] = emailController.text;
+        request.fields['jenis_kelamin'] = selectedGender!;
+        request.fields['jabatan'] = jabatanController.text;
+        request.fields['nama_sekolah'] = namaSekolahController.text;
+        request.fields['kata_sandi'] = kataSandiController.text;
+        request.fields['konfirmasi_kata_sandi'] =
+            konfirmasiKataSandiController.text;
+        request.files.add(
+          await http.MultipartFile.fromPath('foto', selectedImage!.path),
+        );
+
+        var response = await request.send();
+        var responseBody = await response.stream.bytesToString();
+        var responseData = jsonDecode(responseBody);
+
+        if (response.statusCode == 200 && responseData['status'] == 'success') {
+          showSuccess('Registrasi berhasil! Silakan login');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminLoginPage()),
+          );
+        } else {
+          _showErrorDialog(
+            'Registrasi Gagal',
+            responseData['message'] ?? 'Terjadi kesalahan yang tidak diketahui',
+          );
+        }
+      } catch (e) {
+        _showErrorDialog('Terjadi Kesalahan', '$e');
       }
-    } catch (e) {
-      _showErrorDialog('Terjadi Kesalahan', '$e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
+    });
   }
 
   @override
@@ -235,11 +241,30 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
               TextInputType.text,
               TextCapitalization.characters,
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.photo),
-              onPressed: pickImage,
-              label: const Text('Pilih Foto'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LoadingButton(
+                  isLoading: isLoading('pickImage'),
+                  loadingText: 'Memilih...',
+                  onPressed: pickImage,
+                  icon: const Icon(Icons.photo),
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
+                  child: const Text('Pilih Foto'),
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Maksimal ukuran file: 1 MB',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (selectedImage != null)
               Padding(
@@ -252,7 +277,7 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
             const SizedBox(height: 10),
             _buildPasswordField(
               kataSandiController,
-              'Kata Sandi',
+              'Kata Sandi (Min. 6 Karakter)',
               isPasswordVisible,
               () {
                 setState(() => isPasswordVisible = !isPasswordVisible);
@@ -260,7 +285,7 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
             ),
             _buildPasswordField(
               konfirmasiKataSandiController,
-              'Konfirmasi Kata Sandi',
+              'Konfirmasi Kata Sandi (Min. 6 Karakter)',
               isConfirmPasswordVisible,
               () {
                 setState(
@@ -269,24 +294,19 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
               },
             ),
             const SizedBox(height: 20),
-            isLoading
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                  width: 260,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.app_registration),
-                    label: const Text('Registrasi'),
-                    onPressed: registerAdmin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.indigo,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
+            LoadingButton(
+              isLoading: isLoading('register'),
+              loadingText: 'Mendaftar...',
+              onPressed: registerAdmin,
+              icon: const Icon(Icons.app_registration),
+              minimumSize: const Size(260, 50),
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text('Registrasi'),
+            ),
           ],
         ),
       ),

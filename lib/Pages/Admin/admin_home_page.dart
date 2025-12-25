@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +6,7 @@ import 'package:checkin/Pages/Admin/admin_profile_page.dart';
 import 'package:checkin/Pages/Admin/admin_data_input_page.dart';
 import 'package:checkin/Pages/Admin/admin_data_view_page.dart';
 import 'package:checkin/Pages/settings_page.dart';
+import 'package:checkin/utils/loading_indicator_utils.dart';
 
 class AdminHomePage extends StatefulWidget {
   final String email;
@@ -14,12 +15,11 @@ class AdminHomePage extends StatefulWidget {
   _AdminHomePageState createState() => _AdminHomePageState();
 }
 
-class _AdminHomePageState extends State<AdminHomePage> {
+class _AdminHomePageState extends State<AdminHomePage> with LoadingStateMixin {
   int _selectedIndex = 0;
   bool _isFirstVisit = true;
   int? _activeLabelIndex;
   Map<String, dynamic>? _profileData;
-  bool _isLoading = true;
   @override
   void initState() {
     super.initState();
@@ -27,34 +27,36 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   Future<void> fetchProfile() async {
-    final response = await http.post(
-      Uri.parse(
-        'http://10.167.91.233/aplikasi-checkin/pages/admin/get_profile_admin.php',
-      ),
-      body: {'email': widget.email},
-    );
-    if (response.statusCode == 200) {
-      try {
-        final result = json.decode(response.body);
-        if (result['status'] == 'success') {
-          final String baseUrl =
-              'http://10.167.91.233/aplikasi-checkin/uploads/admin/';
-          setState(() {
-            _profileData = result['data'];
-            if (_profileData!['foto'] != null && _profileData!['foto'] != '') {
-              _profileData!['foto'] = baseUrl + _profileData!['foto'];
-            }
-            _isLoading = false;
-          });
-        } else {
-          showError(result['message']);
+    await executeWithLoading('fetchProfile', () async {
+      final response = await http.post(
+        Uri.parse(
+          'http://192.168.1.17/aplikasi-checkin/pages/admin/get_profile_admin.php',
+        ),
+        body: {'email': widget.email},
+      );
+      if (response.statusCode == 200) {
+        try {
+          final result = json.decode(response.body);
+          if (result['status'] == 'success') {
+            final String baseUrl =
+                'http://192.168.1.17/aplikasi-checkin/uploads/admin/';
+            setState(() {
+              _profileData = result['data'];
+              if (_profileData!['foto'] != null &&
+                  _profileData!['foto'] != '') {
+                _profileData!['foto'] = baseUrl + _profileData!['foto'];
+              }
+            });
+          } else {
+            showError(result['message']);
+          }
+        } catch (e) {
+          showError('Format JSON tidak valid: $e');
         }
-      } catch (e) {
-        showError('Format JSON tidak valid: $e');
+      } else {
+        showError('Gagal terhubung ke server. Status: ${response.statusCode}');
       }
-    } else {
-      showError('Gagal terhubung ke server. Status: ${response.statusCode}');
-    }
+    });
   }
 
   void showError(String message) {
@@ -84,7 +86,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (isLoading('fetchProfile')) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final List<Widget> _pages = [
